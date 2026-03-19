@@ -33,62 +33,143 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (chartRef.current && history.length > 0) {
-      if (chartInstance.current) {
-        chartInstance.current.destroy();
-      }
+      if (chartInstance.current) chartInstance.current.destroy();
 
       const labels = history.map(h => {
         const d = new Date(h.created_at);
-        return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}:${d.getSeconds().toString().padStart(2, '0')}`;
+        return `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
       });
-      const powData = history.map(h => h.p);
-      const tempData = history.map(h => h.t);
+
+      const powData = history.map(h => parseFloat(h.p) || 0);
+      const ghiData = history.map(h => parseFloat(h.ghi) || 0);
+      const vData   = history.map(h => parseFloat(h.v) || 0);
+      const iData   = history.map(h => parseFloat(h.i) || 0);
+
+      const pMax = Math.max(...powData, 100) * 1.3;
+      const gMax = Math.max(...ghiData, 200) * 1.3;
 
       const ctx = chartRef.current.getContext('2d');
-      if (ctx) {
-        chartInstance.current = new Chart(ctx, {
-          type: 'line',
-          data: {
-            labels,
-            datasets: [
-              {
-                label: 'Potencia (mW)',
-                data: powData,
-                borderColor: '#f7a800',
-                backgroundColor: 'rgba(247,168,0,0.08)',
-                borderWidth: 2,
-                pointRadius: 0,
-                fill: true,
-                tension: 0.4,
-                yAxisID: 'yP'
-              },
-              {
-                label: 'Temperatura (C)',
-                data: tempData,
-                borderColor: '#ff4560',
-                borderWidth: 1.5,
-                pointRadius: 0,
-                fill: false,
-                tension: 0.4,
-                borderDash: [5, 3],
-                yAxisID: 'yT'
-              }
-            ]
-          },
-          options: {
-            animation: false,
-            responsive: true,
-            scales: {
-              x: { ticks: { color: '#4a6078', font: { family: 'Share Tech Mono', size: 9 }, maxTicksLimit: 8 }, grid: { color: 'rgba(26,40,64,0.5)' } },
-              yP: { type: 'linear', position: 'left', ticks: { color: '#f7a800', font: { family: 'Share Tech Mono', size: 9 } }, grid: { color: 'rgba(26,40,64,0.3)' } },
-              yT: { type: 'linear', position: 'right', ticks: { color: '#ff4560', font: { family: 'Share Tech Mono', size: 9 } }, grid: { display: false } }
+      if (!ctx) return;
+
+      chartInstance.current = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: 'Potencia (mW)',
+              data: powData,
+              borderColor: '#00e676',
+              backgroundColor: 'rgba(0,230,118,0.15)',
+              borderWidth: 2,
+              pointRadius: 0,
+              fill: true,
+              tension: 0.35,
+              yAxisID: 'yP',
+              order: 1,
             },
-            plugins: { legend: { labels: { color: '#4a6078', font: { family: 'Share Tech Mono', size: 10 } } } }
+            {
+              label: 'GHI (W/m²)',
+              data: ghiData,
+              borderColor: '#f7a800',
+              backgroundColor: 'rgba(247,168,0,0.10)',
+              borderWidth: 1.8,
+              pointRadius: 0,
+              fill: true,
+              tension: 0.35,
+              yAxisID: 'yG',
+              order: 2,
+            },
+            {
+              label: 'Voltaje (V)',
+              data: vData,
+              borderColor: '#00c8ff',
+              backgroundColor: 'transparent',
+              borderWidth: 1.5,
+              pointRadius: 0,
+              fill: false,
+              tension: 0.3,
+              borderDash: [6, 3],
+              yAxisID: 'yV',
+              order: 3,
+            },
+            {
+              label: 'Corriente (mA)',
+              data: iData,
+              borderColor: '#80dfff',
+              backgroundColor: 'transparent',
+              borderWidth: 1.8,
+              pointRadius: 0,
+              fill: false,
+              tension: 0.3,
+              yAxisID: 'yI',
+              order: 4,
+            },
+          ]
+        },
+        options: {
+          animation: false,
+          responsive: true,
+          interaction: { mode: 'index', intersect: false },
+          scales: {
+            x: {
+              ticks: { color: '#4a6078', font: { family: 'Share Tech Mono', size: 8 }, maxTicksLimit: 10 },
+              grid: { color: 'rgba(26,40,64,0.5)' }
+            },
+            yP: {
+              type: 'linear', position: 'left',
+              min: 0, max: pMax,
+              ticks: { color: '#00e676', font: { family: 'Share Tech Mono', size: 8 }, callback: (v: any) => `${v}mW` },
+              grid: { color: 'rgba(26,40,64,0.4)' },
+              title: { display: true, text: 'Potencia (mW)', color: '#00e676', font: { family: 'Share Tech Mono', size: 8 } }
+            },
+            yG: {
+              type: 'linear', position: 'right',
+              min: 0, max: gMax,
+              ticks: { color: '#f7a800', font: { family: 'Share Tech Mono', size: 8 }, callback: (v: any) => `${v}` },
+              grid: { display: false },
+              title: { display: true, text: 'GHI (W/m²)', color: '#f7a800', font: { family: 'Share Tech Mono', size: 8 } }
+            },
+            yV: {
+              type: 'linear', position: 'right',
+              min: 0, max: 8,
+              ticks: { color: '#00c8ff', font: { family: 'Share Tech Mono', size: 8 }, callback: (v: any) => `${v}V` },
+              grid: { display: false },
+              title: { display: true, text: 'V', color: '#00c8ff', font: { family: 'Share Tech Mono', size: 8 } }
+            },
+            yI: {
+              type: 'linear', position: 'right',
+              min: 0,
+              ticks: { color: '#80dfff', font: { family: 'Share Tech Mono', size: 8 }, callback: (v: any) => `${v}mA` },
+              grid: { display: false },
+              title: { display: true, text: 'I (mA)', color: '#80dfff', font: { family: 'Share Tech Mono', size: 8 } }
+            },
+          },
+          plugins: {
+            legend: {
+              labels: {
+                color: '#d0e0f0',
+                font: { family: 'Share Tech Mono', size: 9 },
+                boxWidth: 24,
+                padding: 14,
+                usePointStyle: true,
+              }
+            },
+            tooltip: {
+              backgroundColor: '#0b1018',
+              borderColor: '#1a2840',
+              borderWidth: 1,
+              titleColor: '#d0e0f0',
+              bodyColor: '#7090b0',
+              titleFont: { family: 'Share Tech Mono' },
+              bodyFont: { family: 'Share Tech Mono', size: 11 },
+            }
           }
-        });
-      }
+        }
+      });
     }
   }, [history]);
+
 
   useEffect(() => {
     if (gaugeRef.current && data) {
@@ -190,10 +271,10 @@ export default function Dashboard() {
 
         <div className="card span2">
           <div className="ptitle">
-            <span>&#11015; POTENCIA / TEMPERATURA &mdash; HISTÓRICO BD</span>
+            <span>&#11015; VOLTAJE · CORRIENTE · POTENCIA · IRRADIANCIA — BD</span>
             <span style={{ color: 'var(--dim)' }}>{history.length} pts</span>
           </div>
-          <canvas ref={chartRef} height={130}></canvas>
+          <canvas ref={chartRef} height={180}></canvas>
         </div>
 
         {/* ROW 3: GAUGE + COMPASS + ELEVATION */}
