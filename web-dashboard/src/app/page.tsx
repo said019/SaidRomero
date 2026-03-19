@@ -251,7 +251,10 @@ export default function Dashboard() {
 
         {/* ROW 4: TABLE */}
         <div className="card wide">
-          <div className="ptitle"><span>&#8862; REGISTRO DE DATOS BACKEND</span></div>
+          <div className="ptitle">
+            <span>&#8862; REGISTRO DE DATOS BACKEND</span>
+            <a href="/api/download" className="btn bo" style={{textDecoration:'none', padding:'7px 16px', borderRadius:'4px', fontFamily:'var(--mono)', fontSize:'10px', letterSpacing:'.1em', textTransform:'uppercase', color:'var(--c)', border:'1px solid var(--c)'}}>&#8595; CSV</a>
+          </div>
           <div className="twrap">
             <table>
               <thead>
