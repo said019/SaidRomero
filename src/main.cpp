@@ -243,6 +243,33 @@ input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.3)}
     </div>
   </div>
 
+  <!-- LDR -->
+  <div class="card wide">
+    <div class="ptitle"><span>&#9788; SENSORES LDR</span><span style="color:var(--dim)">0–4095 ADC</span></div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px">
+      <div>
+        <div class="clabel"><span>SUP-IZQ</span><span>&#8598;</span></div>
+        <div class="cval" id="ltl" style="font-size:22px">--</div>
+        <div class="bar"><div class="barfill" id="bltl" style="width:0%;background:var(--y)"></div></div>
+      </div>
+      <div>
+        <div class="clabel"><span>SUP-DER</span><span>&#8599;</span></div>
+        <div class="cval" id="ltr" style="font-size:22px">--</div>
+        <div class="bar"><div class="barfill" id="bltr" style="width:0%;background:var(--c)"></div></div>
+      </div>
+      <div>
+        <div class="clabel"><span>INF-IZQ</span><span>&#8601;</span></div>
+        <div class="cval" id="lbl" style="font-size:22px">--</div>
+        <div class="bar"><div class="barfill" id="blbl" style="width:0%;background:var(--g)"></div></div>
+      </div>
+      <div>
+        <div class="clabel"><span>INF-DER</span><span>&#8600;</span></div>
+        <div class="cval" id="lbr" style="font-size:22px">--</div>
+        <div class="bar"><div class="barfill" id="blbr" style="width:0%;background:var(--r)"></div></div>
+      </div>
+    </div>
+  </div>
+
   <!-- Fila 4: tabla -->
   <div class="card span3">
     <div class="ptitle">
@@ -392,6 +419,18 @@ function updateUI(d) {
   var ef = parseFloat(d.ef) || 0;
   var ghi = parseFloat(d.ghi) || 0;
   var dni = parseFloat(d.dni) || 0;
+
+  /* LDR */
+  var ltl = parseInt(d.ltl)||0, ltr = parseInt(d.ltr)||0;
+  var lbl2= parseInt(d.lbl)||0, lbr = parseInt(d.lbr)||0;
+  document.getElementById('ltl').textContent = ltl;
+  document.getElementById('ltr').textContent = ltr;
+  document.getElementById('lbl').textContent = lbl2;
+  document.getElementById('lbr').textContent = lbr;
+  document.getElementById('bltl').style.width = (ltl/4095*100).toFixed(1)+'%';
+  document.getElementById('bltr').style.width = (ltr/4095*100).toFixed(1)+'%';
+  document.getElementById('blbl').style.width = (lbl2/4095*100).toFixed(1)+'%';
+  document.getElementById('blbr').style.width = (lbr/4095*100).toFixed(1)+'%';
 
   /* Tarjetas métricas */
   document.getElementById('mv').innerHTML  = v.toFixed(3) + '<span class="cunit">V</span>';
@@ -1080,16 +1119,23 @@ void configurarRutas() {
     float ef = 100.0f * (1.0f + COEF_TEMP * (temperatura - TEMP_REF));
     if (isnan(ef)) ef = 0.0;
 
-    char buf[420];
+    int lTL = analogRead(LDR_TL);
+    int lTR = analogRead(LDR_TR);
+    int lBL = analogRead(LDR_BL);
+    int lBR = analogRead(LDR_BR);
+
+    char buf[480];
     snprintf(buf, sizeof(buf),
       "{\"v\":%.4f,\"i\":%.3f,\"p\":%.3f,\"t\":%.2f,"
       "\"ah\":%d,\"av\":%d,\"st\":%d,\"ec\":%d,"
       "\"mp\":%.2f,\"pp\":%.2f,\"ef\":%.1f,"
-      "\"ghi\":%.1f,\"dni\":%.1f,\"irrh\":\"%s\",\"cielo\":\"%s\"}",
+      "\"ghi\":%.1f,\"dni\":%.1f,\"irrh\":\"%s\",\"cielo\":\"%s\","
+      "\"ltl\":%d,\"ltr\":%d,\"lbl\":%d,\"lbr\":%d}",
       voltaje, corriente_mA, potencia_mW, temperatura,
       anguloH, anguloV, (int)estado, nEnfriamientos,
       mejorPot, potProm, ef,
-      irradianciaGHI, irradiancaDNI, irrHora, condCielo);
+      irradianciaGHI, irradiancaDNI, irrHora, condCielo,
+      lTL, lTR, lBL, lBR);
     server.send(200, "application/json", buf);
   });
 
