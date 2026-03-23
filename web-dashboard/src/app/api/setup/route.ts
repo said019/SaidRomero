@@ -21,7 +21,11 @@ export async function GET() {
         ghi REAL,
         dni REAL,
         irrh VARCHAR(10),
-        cielo VARCHAR(50)
+        cielo VARCHAR(50),
+        ltl INTEGER,
+        ltr INTEGER,
+        lbl INTEGER,
+        lbr INTEGER
       );
     `;
     await pool.query(createTableQuery);

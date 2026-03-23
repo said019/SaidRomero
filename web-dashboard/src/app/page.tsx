@@ -197,7 +197,8 @@ export default function Dashboard() {
     v: 0, i: 0, p: 0, t: 0,
     ah: 90, av: 90, st: 0, ec: 0,
     mp: 0, pp: 0, ef: 0,
-    ghi: 0, dni: 0, irrh: '--', cielo: '---'
+    ghi: 0, dni: 0, irrh: '--', cielo: '---',
+    ltl: 0, ltr: 0, lbl: 0, lbr: 0
   };
 
   const d = data || fallback;
@@ -243,6 +244,33 @@ export default function Dashboard() {
           <div className="cval">{d.t.toFixed(1)}<span className="cunit">&deg;C</span></div>
           <div className="csub">Open-Meteo &middot; Vercel</div>
           <div className="bar"><div className="barfill" style={{ width: `${Math.min(d.t / 80 * 100, 100)}%` }}></div></div>
+        </div>
+
+        {/* LDR SENSORS */}
+        <div className="card wide">
+          <div className="ptitle"><span>&#9788; SENSORES LDR</span><span style={{ color: 'var(--dim)' }}>0–4095 ADC</span></div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '14px' }}>
+            <div>
+              <div className="clabel"><span>SUP-IZQ</span><span>&#8598;</span></div>
+              <div className="cval" style={{ fontSize: '22px' }}>{d.ltl}</div>
+              <div className="bar"><div className="barfill" style={{ width: `${(d.ltl / 4095 * 100).toFixed(1)}%`, background: 'var(--y)' }}></div></div>
+            </div>
+            <div>
+              <div className="clabel"><span>SUP-DER</span><span>&#8599;</span></div>
+              <div className="cval" style={{ fontSize: '22px' }}>{d.ltr}</div>
+              <div className="bar"><div className="barfill" style={{ width: `${(d.ltr / 4095 * 100).toFixed(1)}%`, background: 'var(--c)' }}></div></div>
+            </div>
+            <div>
+              <div className="clabel"><span>INF-IZQ</span><span>&#8601;</span></div>
+              <div className="cval" style={{ fontSize: '22px' }}>{d.lbl}</div>
+              <div className="bar"><div className="barfill" style={{ width: `${(d.lbl / 4095 * 100).toFixed(1)}%`, background: 'var(--g)' }}></div></div>
+            </div>
+            <div>
+              <div className="clabel"><span>INF-DER</span><span>&#8600;</span></div>
+              <div className="cval" style={{ fontSize: '22px' }}>{d.lbr}</div>
+              <div className="bar"><div className="barfill" style={{ width: `${(d.lbr / 4095 * 100).toFixed(1)}%`, background: 'var(--r)' }}></div></div>
+            </div>
+          </div>
         </div>
 
         {/* ROW 2: IRRADIANCE + CHART */}
@@ -342,7 +370,7 @@ export default function Dashboard() {
                 <tr>
                   <th>ID</th><th>HORA</th><th>V (V)</th><th>I (mA)</th>
                   <th>P (mW)</th><th>T (&deg;C)</th><th>GHI (W/m&sup2;)</th>
-                  <th>AH&deg;</th><th>AV&deg;</th><th>ESTADO</th>
+                  <th>AH&deg;</th><th>AV&deg;</th><th>LDR(TL/TR/BL/BR)</th><th>ESTADO</th>
                 </tr>
               </thead>
               <tbody>
@@ -361,6 +389,7 @@ export default function Dashboard() {
                       <td>{row.ghi.toFixed(0)}</td>
                       <td>{row.ah}</td>
                       <td>{row.av}</td>
+                      <td style={{fontSize:'9px', color:'var(--dim)'}}>{row.ltl}/{row.ltr}/{row.lbl}/{row.lbr}</td>
                       <td><span className={`tag ${ECLS[row.st]}`}>{ESTADOS[row.st]}</span></td>
                     </tr>
                   )
