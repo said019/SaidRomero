@@ -813,19 +813,27 @@ void actualizarOLED() {
 //  TEMPERATURA VÍA OPEN-METEO
 // ─────────────────────────────────────────────────────────────────────
 void fetchTemperatura() {
-  if (WiFi.status() != WL_CONNECTED) return;
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("[WEATHER] Sin WiFi, skip");
+    return;
+  }
   HTTPClient http;
   http.begin(WEATHER_URL);
   http.setTimeout(6000);
   int code = http.GET();
+  Serial.printf("[WEATHER] HTTP code=%d\n", code);
   if (code == 200) {
     String body = http.getString();
+    Serial.printf("[WEATHER] Body (150ch): %s\n", body.substring(0, 150).c_str());
     int idx = body.indexOf("\"temperature\":");
     if (idx >= 0) {
       String val = body.substring(idx + 14, idx + 20);
       val.trim();
       float t = val.toFloat();
+      Serial.printf("[WEATHER] idx=%d val='%s' t=%.2f\n", idx, val.c_str(), t);
       if (t != 0.0f) { tempAmbiente = t; temperatura = t; }
+    } else {
+      Serial.println("[WEATHER] 'temperature' key NOT found");
     }
     int widx = body.indexOf("\"weathercode\":");
     if (widx >= 0) {
@@ -838,10 +846,11 @@ void fetchTemperatura() {
       else if (wcode <= 67) strcpy(condCieloWX, "Nublado");
       else if (wcode <= 77) strcpy(condCieloWX, "Nieve");
       else                  strcpy(condCieloWX, "Lluvia");
-      // Solo actualizar condCielo con weather si no hay irradiancia real
       if (irradianciaGHI <= 0.0f) strcpy(condCielo, condCieloWX);
     }
-    Serial.printf("[WEATHER] T=%.1f°C  WX=%s\n", tempAmbiente, condCieloWX);
+    Serial.printf("[WEATHER] Final T=%.1f  WX=%s\n", tempAmbiente, condCieloWX);
+  } else {
+    Serial.printf("[WEATHER] Error HTTP %d\n", code);
   }
   http.end();
 }
