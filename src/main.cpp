@@ -825,28 +825,34 @@ void fetchTemperatura() {
   if (code == 200) {
     String body = http.getString();
     Serial.printf("[WEATHER] Body (150ch): %s\n", body.substring(0, 150).c_str());
-    int idx = body.indexOf("\"temperature\":");
-    if (idx >= 0) {
-      String val = body.substring(idx + 14, idx + 20);
-      val.trim();
-      float t = val.toFloat();
-      Serial.printf("[WEATHER] idx=%d val='%s' t=%.2f\n", idx, val.c_str(), t);
-      if (t != 0.0f) { tempAmbiente = t; temperatura = t; }
+    int cwIdx = body.indexOf("\"current_weather\":");
+    if (cwIdx >= 0) {
+      int idx = body.indexOf("\"temperature\":", cwIdx);
+      if (idx >= 0) {
+        String val = body.substring(idx + 14, idx + 20);
+        val.trim();
+        float t = val.toFloat();
+        Serial.printf("[WEATHER] idx=%d val='%s' t=%.2f\n", idx, val.c_str(), t);
+        if (t != 0.0f) { tempAmbiente = t; temperatura = t; }
+      } else {
+        Serial.println("[WEATHER] 'temperature' key NOT found inside current_weather");
+      }
+      
+      int widx = body.indexOf("\"weathercode\":", cwIdx);
+      if (widx >= 0) {
+        String wval = body.substring(widx + 14, widx + 18);
+        wval.trim(); wval.replace(",",""); wval.replace("}","");
+        int wcode = wval.toInt();
+        if      (wcode == 0)  strcpy(condCieloWX, "Despejado");
+        else if (wcode <= 3)  strcpy(condCieloWX, "Parcial");
+        else if (wcode <= 48) strcpy(condCieloWX, "Niebla");
+        else if (wcode <= 67) strcpy(condCieloWX, "Nublado");
+        else if (wcode <= 77) strcpy(condCieloWX, "Nieve");
+        else                  strcpy(condCieloWX, "Lluvia");
+        if (irradianciaGHI <= 0.0f) strcpy(condCielo, condCieloWX);
+      }
     } else {
-      Serial.println("[WEATHER] 'temperature' key NOT found");
-    }
-    int widx = body.indexOf("\"weathercode\":");
-    if (widx >= 0) {
-      String wval = body.substring(widx + 14, widx + 18);
-      wval.trim(); wval.replace(",",""); wval.replace("}","");
-      int wcode = wval.toInt();
-      if      (wcode == 0)  strcpy(condCieloWX, "Despejado");
-      else if (wcode <= 3)  strcpy(condCieloWX, "Parcial");
-      else if (wcode <= 48) strcpy(condCieloWX, "Niebla");
-      else if (wcode <= 67) strcpy(condCieloWX, "Nublado");
-      else if (wcode <= 77) strcpy(condCieloWX, "Nieve");
-      else                  strcpy(condCieloWX, "Lluvia");
-      if (irradianciaGHI <= 0.0f) strcpy(condCielo, condCieloWX);
+      Serial.println("[WEATHER] 'current_weather' no encontrado");
     }
     Serial.printf("[WEATHER] Final T=%.1f  WX=%s\n", tempAmbiente, condCieloWX);
   } else {
