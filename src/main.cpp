@@ -626,8 +626,8 @@ unsigned long tIrr    = 0;
 #define SERVO_V  19
 #define LDR_TL   32
 #define LDR_TR   33
-#define LDR_BL   25
-#define LDR_BR   26
+#define LDR_BL   34 // Movido a ADC1 (era 25)
+#define LDR_BR   35 // Movido a ADC1 (era 26)
 
 // ─────────────────────────────────────────────────────────────────────
 //  PARÁMETROS TÉRMICOS
