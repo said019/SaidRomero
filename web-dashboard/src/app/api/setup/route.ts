@@ -30,6 +30,15 @@ export async function GET() {
     `;
     await pool.query(createTableQuery);
 
+    const alterTableQuery = `
+      ALTER TABLE log_data 
+      ADD COLUMN IF NOT EXISTS ltl INTEGER DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS ltr INTEGER DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS lbl INTEGER DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS lbr INTEGER DEFAULT 0;
+    `;
+    await pool.query(alterTableQuery);
+
     return NextResponse.json({ success: true, message: "Table 'log_data' created successfully." });
   } catch (err: any) {
     console.error("Database Error:", err);
