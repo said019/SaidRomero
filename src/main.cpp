@@ -925,10 +925,10 @@ void fetchIrradiancia() {
 void leerSensores() {
   float vs=0, is=0, ps=0;
   for (int i=0; i<5; i++) {
+    float bv = ina219.getBusVoltage_V() + ina219.getShuntVoltage_mV() / 1000.0f;
     float ic = ina219.getCurrent_mA(); if (ic < 0) ic = 0;
-    float pw = ina219.getPower_mW();   if (pw < 0) pw = 0;
-    vs += ina219.getBusVoltage_V() + ina219.getShuntVoltage_mV() / 1000.0f;
-    is += ic; ps += pw;
+    float pw = bv * ic;                if (pw < 0) pw = 0;  // V×I manual (mejor resolución)
+    vs += bv; is += ic; ps += pw;
     server.handleClient(); delay(6);
   }
   voltaje      = vs / 5.0f;
@@ -1180,40 +1180,6 @@ void setup() {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-//  ENVÍO DE DATOS A VERCEL (POST)
-// ─────────────────────────────────────────────────────────────────────
-const char* URL_VERCEL = "https://tu-proyecto.vercel.app/api/update";
-
-void enviarDatosVercel() {
-  if (WiFi.status() != WL_CONNECTED) return;
-  HTTPClient http;
-  http.begin(URL_VERCEL);
-  http.addHeader("Content-Type", "application/json");
-
-  float ef = 100.0f * (1.0f + COEF_TEMP * (temperatura - TEMP_REF));
-  if (isnan(ef)) ef = 0.0;
-  
-  char buf[420];
-  snprintf(buf, sizeof(buf),
-    "{\"v\":%.4f,\"i\":%.3f,\"p\":%.3f,\"t\":%.2f,"
-    "\"ah\":%d,\"av\":%d,\"st\":%d,\"ec\":%d,"
-    "\"mp\":%.2f,\"pp\":%.2f,\"ef\":%.1f,"
-    "\"ghi\":%.1f,\"dni\":%.1f,\"irrh\":\"%s\",\"cielo\":\"%s\"}",
-    voltaje, corriente_mA, potencia_mW, temperatura,
-    anguloH, anguloV, (int)estado, nEnfriamientos,
-    mejorPot, potProm, ef,
-    irradianciaGHI, irradiancaDNI, irrHora, condCielo);
-    
-  int code = http.POST(buf);
-  if (code > 0) {
-    Serial.printf("[VERCEL] Enviado OK HTTP %d\n", code);
-  } else {
-    Serial.printf("[VERCEL] Error enviando: %d\n", code);
-  }
-  http.end();
-}
-
-// ─────────────────────────────────────────────────────────────────────
 //  LOOP PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────
 void loop() {
@@ -1245,13 +1211,13 @@ void loop() {
       primerRegistro = false;
       tCSV = now;
     }
-    enviarDatosVercel();
   }
 
   if (estado == ENFRIANDO) gestionarEnfriamiento();
 
-  // Temperatura cada 5 min
-  if (now - tWeather >= T_WEATHER) {
+  // Temperatura cada 5 min (o inmediatamente en el primer ciclo con WiFi)
+  if (WiFi.status() == WL_CONNECTED &&
+      (tWeather == 0 || now - tWeather >= T_WEATHER)) {
     tWeather = now;
     fetchTemperatura();
   }
