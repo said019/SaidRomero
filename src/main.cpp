@@ -1185,6 +1185,47 @@ void configurarRutas() {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+//  ENVÍO DE DATOS A VERCEL (POST)
+// ─────────────────────────────────────────────────────────────────────
+const char* URL_VERCEL = "https://said-romero.vercel.app/api/update";
+
+void enviarDatosVercel() {
+  if (WiFi.status() != WL_CONNECTED) return;
+  HTTPClient http;
+  http.begin(URL_VERCEL);
+  http.addHeader("Content-Type", "application/json");
+
+  float ef = 100.0f * (1.0f + COEF_TEMP * (temperatura - TEMP_REF));
+  if (isnan(ef)) ef = 0.0;
+  
+  int lTL = analogRead(LDR_TL);
+  int lTR = analogRead(LDR_TR);
+  int lBL = analogRead(LDR_BL);
+  int lBR = analogRead(LDR_BR);
+
+  char buf[480];
+  snprintf(buf, sizeof(buf),
+    "{\"v\":%.4f,\"i\":%.3f,\"p\":%.3f,\"t\":%.2f,"
+    "\"ah\":%d,\"av\":%d,\"st\":%d,\"ec\":%d,"
+    "\"mp\":%.2f,\"pp\":%.2f,\"ef\":%.1f,"
+    "\"ghi\":%.1f,\"dni\":%.1f,\"irrh\":\"%s\",\"cielo\":\"%s\","
+    "\"ltl\":%d,\"ltr\":%d,\"lbl\":%d,\"lbr\":%d}",
+    voltaje, corriente_mA, potencia_mW, temperatura,
+    anguloH, anguloV, (int)estado, nEnfriamientos,
+    mejorPot, potProm, ef,
+    irradianciaGHI, irradiancaDNI, irrHora, condCielo,
+    lTL, lTR, lBL, lBR);
+    
+  int code = http.POST(buf);
+  if (code > 0) {
+    Serial.printf("[VERCEL] Enviado OK HTTP %d\n", code);
+  } else {
+    Serial.printf("[VERCEL] Error enviando: %d\n", code);
+  }
+  http.end();
+}
+
+// ─────────────────────────────────────────────────────────────────────
 //  SETUP
 // ─────────────────────────────────────────────────────────────────────
 void setup() {
@@ -1266,6 +1307,7 @@ void loop() {
       primerRegistro = false;
       tCSV = now;
     }
+    enviarDatosVercel();
   }
 
   if (estado == ENFRIANDO) gestionarEnfriamiento();
