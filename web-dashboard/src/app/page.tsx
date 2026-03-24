@@ -274,7 +274,7 @@ export default function Dashboard() {
         </div>
 
         {/* ROW 2: IRRADIANCE + CHART */}
-        <div className="card span2">
+        <div className="card wide">
           <div className="ptitle"><span>&#9788; IRRADIANCIA SOLAR (GHI)</span><span style={{ color: 'var(--dim)' }}>Open-Meteo API</span></div>
           <div className="irr-grid">
             <div className="irr-col">
@@ -297,7 +297,7 @@ export default function Dashboard() {
           <div className="bar" style={{ marginTop: '12px' }}><div className="barfill" style={{ width: `${Math.min(d.ghi / 1200 * 100, 100)}%` }}></div></div>
         </div>
 
-        <div className="card span2">
+        <div className="card wide">
           <div className="ptitle">
             <span>&#11015; VOLTAJE · CORRIENTE · POTENCIA · IRRADIANCIA — BD</span>
             <span style={{ color: 'var(--dim)' }}>{history.length} pts</span>
