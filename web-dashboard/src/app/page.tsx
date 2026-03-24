@@ -8,13 +8,22 @@ const ECLS = ['tn', 'te', 'te', 'ts'];
 export default function Dashboard() {
   const [data, setData] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
+  const [isFiltering, setIsFiltering] = useState<boolean>(false);
   const chartRef = useRef<HTMLCanvasElement>(null);
   const gaugeRef = useRef<HTMLCanvasElement>(null);
   const chartInstance = useRef<any>(null);
 
-  const fetchSensorData = async () => {
+  const fetchSensorData = async (filterMode = isFiltering) => {
     try {
-      const res = await fetch('/api/data');
+      let url = '/api/data';
+      if (filterMode && startDate && endDate) {
+        const startIso = new Date(startDate).toISOString();
+        const endIso = new Date(endDate).toISOString();
+        url += `?start=${encodeURIComponent(startIso)}&end=${encodeURIComponent(endIso)}`;
+      }
+      const res = await fetch(url);
       const json = await res.json();
       if (json.success && json.latest) {
         setData(json.latest);
@@ -27,9 +36,12 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchSensorData();
-    const interval = setInterval(fetchSensorData, 3000);
+    const interval = setInterval(() => {
+      // Solo actualizamos automáticamente si no estamos viendo un historial específico
+      if (!isFiltering) fetchSensorData(false);
+    }, 3000);
     return () => clearInterval(interval);
-  }, []);
+  }, [startDate, endDate, isFiltering]);
 
   useEffect(() => {
     if (chartRef.current && history.length > 0) {
@@ -300,7 +312,14 @@ export default function Dashboard() {
         <div className="card wide">
           <div className="ptitle">
             <span>&#11015; VOLTAJE · CORRIENTE · POTENCIA · IRRADIANCIA — BD</span>
-            <span style={{ color: 'var(--dim)' }}>{history.length} pts</span>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <input type="datetime-local" style={{ background: 'var(--bg)', color: 'white', border: '1px solid var(--border)', padding: '5px', fontSize: '10px', fontFamily: 'var(--mono)', borderRadius: '4px' }} value={startDate} onChange={e => setStartDate(e.target.value)} />
+              <span style={{ color: 'var(--dim)', fontSize: '10px' }}>a</span>
+              <input type="datetime-local" style={{ background: 'var(--bg)', color: 'white', border: '1px solid var(--border)', padding: '5px', fontSize: '10px', fontFamily: 'var(--mono)', borderRadius: '4px' }} value={endDate} onChange={e => setEndDate(e.target.value)} />
+              <button className="btn bp" style={{ padding: '6px 12px' }} onClick={() => { setIsFiltering(true); fetchSensorData(true); }}>FILTRAR</button>
+              <button className="btn bd" style={{ padding: '6px 12px' }} onClick={() => { setIsFiltering(false); setStartDate(''); setEndDate(''); fetchSensorData(false); }}>LIMPIAR</button>
+              <span style={{ color: 'var(--dim)', marginLeft: '10px' }}>{history.length} pts</span>
+            </div>
           </div>
           <canvas ref={chartRef} height={180}></canvas>
         </div>

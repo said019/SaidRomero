@@ -710,6 +710,7 @@ float potProm     = 0;
 unsigned long tSensor = 0;
 unsigned long tLDR    = 0;
 unsigned long tCSV    = 0;
+unsigned long tVercel = 0;
 unsigned long tFrio   = 0;
 unsigned long tBoot   = 0;
 unsigned long tOled   = 0;
@@ -1305,6 +1306,8 @@ void setup() {
     fetchTemperatura();
     fetchIrradiancia();      // primera consulta al arrancar
     tIrr = millis();
+    tWeather = millis();
+    tVercel = millis();
   } else {
     WiFi.mode(WIFI_AP);
     WiFi.softAP(AP_SSID, AP_PASS);
@@ -1345,6 +1348,11 @@ void loop() {
       primerRegistro = false;
       tCSV = now;
     }
+  }
+
+  // Enviar POST a Vercel cada 2 min (120000 ms)
+  if (now - tVercel >= 120000UL) {
+    tVercel = now;
     enviarDatosVercel();
   }
 

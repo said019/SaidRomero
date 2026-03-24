@@ -1,14 +1,31 @@
 import pool from '@/lib/db';
 import { NextResponse } from 'next/server';
 
-export async function GET() {
+export const dynamic = 'force-dynamic';
+
+export async function GET(request: Request) {
   try {
-    // Fetch the latest 80 points to draw the chart, ordered chronologically (newest at the end)
-    const result = await pool.query(`
+    const { searchParams } = new URL(request.url);
+    const start = searchParams.get('start');
+    const end = searchParams.get('end');
+
+    let historyQuery = `
       SELECT * FROM (
         SELECT * FROM log_data ORDER BY id DESC LIMIT 80
       ) sub ORDER BY id ASC
-    `);
+    `;
+    
+    const queryParams: any[] = [];
+    if (start && end) {
+      historyQuery = `
+        SELECT * FROM log_data 
+        WHERE created_at >= $1 AND created_at <= $2 
+        ORDER BY id ASC
+      `;
+      queryParams.push(start, end);
+    }
+
+    const result = await pool.query(historyQuery, queryParams);
 
     // Fetch the single absolute latest state for dashboard gauges
     const latestResult = await pool.query(`SELECT * FROM log_data ORDER BY id DESC LIMIT 1`);
