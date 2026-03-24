@@ -152,7 +152,7 @@ input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.3)}
   </div>
 
   <!-- Fila 2: irradiancia + gráfica -->
-  <div class="card span2">
+  <div class="card wide">
     <div class="ptitle"><span>&#9788; IRRADIANCIA SOLAR (GHI)</span><span style="color:var(--dim)">Open-Meteo ERA5/IFS</span></div>
     <div class="irr-grid">
       <div class="irr-col">
@@ -175,12 +175,12 @@ input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.3)}
     <div class="bar" style="margin-top:12px"><div class="barfill" id="bghi" style="width:0%"></div></div>
   </div>
 
-  <div class="card span2">
+  <div class="card wide">
     <div class="ptitle">
-      <span>&#11015; POTENCIA / TEMPERATURA &mdash; TIEMPO REAL</span>
+      <span>&#11015; VOLTAJE &middot; CORRIENTE &middot; POTENCIA &middot; IRRADIANCIA</span>
       <span id="npts" style="color:var(--dim)">0 pts</span>
     </div>
-    <canvas id="chartPT" height="130"></canvas>
+    <canvas id="chartPT" height="80"></canvas>
   </div>
   <!-- Fila 3: gauge + brújula + elevación + control -->
   <div class="card">
@@ -314,7 +314,10 @@ input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.3)}
 /* ── Estado global ── */
 var MAX_PTS  = 80;
 var histP    = [];
-var histT    = [];
+var histT    = []; // No se graficará pero sirve por si acaso
+var histV    = [];
+var histI    = [];
+var histG    = [];
 var histL    = [];
 var registros = [];
 var chartPT  = null;
@@ -333,48 +336,51 @@ function initChart() {
         {
           label: 'Potencia (mW)',
           data: histP,
-          borderColor: '#f7a800',
-          backgroundColor: 'rgba(247,168,0,0.08)',
-          borderWidth: 2,
-          pointRadius: 0,
-          fill: true,
-          lineTension: 0.4,
-          yAxisID: 'yP'
+          borderColor: '#00e676', backgroundColor: 'rgba(0,230,118,0.15)',
+          borderWidth: 2, pointRadius: 0, fill: true, lineTension: 0.35, yAxisID: 'yP'
         },
         {
-          label: 'Temperatura (C)',
-          data: histT,
-          borderColor: '#ff4560',
-          backgroundColor: 'transparent',
-          borderWidth: 1.5,
-          pointRadius: 0,
-          fill: false,
-          lineTension: 0.4,
-          borderDash: [5,3],
-          yAxisID: 'yT'
+          label: 'GHI (W/m²)',
+          data: histG,
+          borderColor: '#f7a800', backgroundColor: 'rgba(247,168,0,0.10)',
+          borderWidth: 1.8, pointRadius: 0, fill: true, lineTension: 0.35, yAxisID: 'yG'
+        },
+        {
+          label: 'Voltaje (V)',
+          data: histV,
+          borderColor: '#00c8ff', backgroundColor: 'transparent',
+          borderWidth: 1.5, pointRadius: 0, fill: false, lineTension: 0.3, borderDash: [6,3], yAxisID: 'yV'
+        },
+        {
+          label: 'Corriente (mA)',
+          data: histI,
+          borderColor: '#80dfff', backgroundColor: 'transparent',
+          borderWidth: 1.8, pointRadius: 0, fill: false, lineTension: 0.3, yAxisID: 'yI'
         }
       ]
     },
     options: {
       animation: false,
       responsive: true,
-      legend: { labels: { fontColor: '#4a6078', fontFamily: 'Share Tech Mono', fontSize: 10 } },
+      legend: { labels: { fontColor: '#d0e0f0', fontFamily: 'Share Tech Mono', fontSize: 10, usePointStyle: true } },
       scales: {
         xAxes: [{
-          ticks: { fontColor: '#4a6078', fontFamily: 'Share Tech Mono', fontSize: 9, maxTicksLimit: 8 },
+          ticks: { fontColor: '#4a6078', fontFamily: 'Share Tech Mono', fontSize: 9, maxTicksLimit: 10 },
           gridLines: { color: 'rgba(26,40,64,0.5)' }
         }],
         yAxes: [
           {
             id: 'yP', position: 'left',
-            ticks: { fontColor: '#f7a800', fontFamily: 'Share Tech Mono', fontSize: 9 },
+            ticks: { fontColor: '#00e676', fontFamily: 'Share Tech Mono', fontSize: 9 },
             gridLines: { color: 'rgba(26,40,64,0.3)' }
           },
           {
-            id: 'yT', position: 'right',
-            ticks: { fontColor: '#ff4560', fontFamily: 'Share Tech Mono', fontSize: 9 },
+            id: 'yG', position: 'right',
+            ticks: { fontColor: '#f7a800', fontFamily: 'Share Tech Mono', fontSize: 9 },
             gridLines: { display: false }
-          }
+          },
+          { id: 'yV', position: 'right', display: false },
+          { id: 'yI', position: 'right', display: false }
         ]
       }
     }
@@ -479,8 +485,8 @@ function updateUI(d) {
   /* Gráfica histórica */
   var now = new Date();
   var lbl = pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
-  histP.push(p); histT.push(t); histL.push(lbl);
-  if (histP.length > MAX_PTS) { histP.shift(); histT.shift(); histL.shift(); }
+  histP.push(p); histV.push(v); histI.push(i); histG.push(ghi); histL.push(lbl);
+  if (histP.length > MAX_PTS) { histP.shift(); histV.shift(); histI.shift(); histG.shift(); histL.shift(); }
   if (chartPT) chartPT.update();
   document.getElementById('npts').textContent = histP.length + ' pts';
 
