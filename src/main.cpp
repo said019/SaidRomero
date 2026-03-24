@@ -20,6 +20,7 @@
 #include <ESP32Servo.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+#include <ArduinoJson.h>
 #include <math.h>
 
 // ─────────────────────────────────────────────────────────────────────
@@ -648,6 +649,10 @@ unsigned long tIrr    = 0;
 #define ANG_V_MAX 150
 #define LDR_TOL    40
 
+// Variables Filtro EMA para LDR
+float f_TL = 0, f_TR = 0, f_BL = 0, f_BR = 0;
+const float EMA_ALPHA = 0.15f;
+
 // ─────────────────────────────────────────────────────────────────────
 //  INTERVALOS
 // ─────────────────────────────────────────────────────────────────────
@@ -822,39 +827,33 @@ void fetchTemperatura() {
   http.setTimeout(6000);
   int code = http.GET();
   Serial.printf("[WEATHER] HTTP code=%d\n", code);
+  
   if (code == 200) {
-    String body = http.getString();
-    Serial.printf("[WEATHER] Body (150ch): %s\n", body.substring(0, 150).c_str());
-    int cwIdx = body.indexOf("\"current_weather\":");
-    if (cwIdx >= 0) {
-      int idx = body.indexOf("\"temperature\":", cwIdx);
-      if (idx >= 0) {
-        String val = body.substring(idx + 14, idx + 20);
-        val.trim();
-        float t = val.toFloat();
-        Serial.printf("[WEATHER] idx=%d val='%s' t=%.2f\n", idx, val.c_str(), t);
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, http.getStream());
+    
+    if (!error) {
+      if (!doc["current_weather"].isNull()) {
+        float t = doc["current_weather"]["temperature"];
         if (t != 0.0f) { tempAmbiente = t; temperatura = t; }
-      } else {
-        Serial.println("[WEATHER] 'temperature' key NOT found inside current_weather");
-      }
-      
-      int widx = body.indexOf("\"weathercode\":", cwIdx);
-      if (widx >= 0) {
-        String wval = body.substring(widx + 14, widx + 18);
-        wval.trim(); wval.replace(",",""); wval.replace("}","");
-        int wcode = wval.toInt();
+        
+        int wcode = doc["current_weather"]["weathercode"];
         if      (wcode == 0)  strcpy(condCieloWX, "Despejado");
         else if (wcode <= 3)  strcpy(condCieloWX, "Parcial");
         else if (wcode <= 48) strcpy(condCieloWX, "Niebla");
         else if (wcode <= 67) strcpy(condCieloWX, "Nublado");
         else if (wcode <= 77) strcpy(condCieloWX, "Nieve");
         else                  strcpy(condCieloWX, "Lluvia");
+        
         if (irradianciaGHI <= 0.0f) strcpy(condCielo, condCieloWX);
+        Serial.printf("[WEATHER] Final T=%.1f  WX=%s\n", t, condCieloWX);
+      } else {
+        Serial.println("[WEATHER] 'current_weather' key NOT found in JSON");
       }
     } else {
-      Serial.println("[WEATHER] 'current_weather' no encontrado");
+      Serial.print("[WEATHER] JSON Parse falló: ");
+      Serial.println(error.c_str());
     }
-    Serial.printf("[WEATHER] Final T=%.1f  WX=%s\n", tempAmbiente, condCieloWX);
   } else {
     Serial.printf("[WEATHER] Error HTTP %d\n", code);
   }
@@ -896,81 +895,48 @@ void fetchIrradiancia() {
     http.end();
     return;
   }
-  String body = http.getString();
+  
+  JsonDocument doc;
+  DeserializationError error = deserializeJson(doc, http.getStream());
   http.end();
 
-  // Token de búsqueda: "T09:" o "T14:" etc.
+  if (error) {
+    Serial.print("[IRR] JSON failed: ");
+    Serial.println(error.c_str());
+    return;
+  }
+
   char token[7];
   snprintf(token, sizeof(token), "T%02d:", horaActual);
 
-  // Encontrar inicio del array time
-  int timeStart = body.indexOf("\"time\":[");
-  if (timeStart < 0) { Serial.println("[IRR] No array time"); return; }
-
-  // Posición del token dentro del array
-  int tokenPos = body.indexOf(token, timeStart);
-  if (tokenPos < 0) { Serial.printf("[IRR] Token %s no encontrado\n", token); return; }
-
-  // Contar comas entre timeStart y tokenPos → índice
-  int dataIdx = 0;
-  for (int k = timeStart; k < tokenPos; k++) {
-    if (body[k] == ',') dataIdx++;
-  }
-
-  // ── Helper: extraer valor[dataIdx] de un campo de array ──────────
-  // (inline, sin lambda para máxima compatibilidad)
-
-  // Extraer GHI
-  float ghiVal = 0.0f;
-  {
-    const char* CAMPO = "\"shortwave_radiation\":[";
-    int fStart = body.indexOf(CAMPO);
-    if (fStart >= 0) {
-      fStart += strlen(CAMPO);
-      int pos = fStart;
-      for (int k = 0; k < dataIdx; k++) {
-        pos = body.indexOf(',', pos);
-        if (pos < 0) { pos = fStart; break; }
-        pos++;
-      }
-      int end = pos;
-      while (end < (int)body.length() && body[end] != ',' && body[end] != ']') end++;
-      ghiVal = body.substring(pos, end).toFloat();
+  JsonArray times = doc["hourly"]["time"].as<JsonArray>();
+  int dataIdx = -1;
+  int i = 0;
+  for (JsonVariant v : times) {
+    String tstr = v.as<String>();
+    if (tstr.indexOf(token) >= 0) {
+      dataIdx = i;
+      break;
     }
+    i++;
   }
 
-  // Extraer DNI
-  float dniVal = 0.0f;
-  {
-    const char* CAMPO = "\"direct_normal_irradiance\":[";
-    int fStart = body.indexOf(CAMPO);
-    if (fStart >= 0) {
-      fStart += strlen(CAMPO);
-      int pos = fStart;
-      for (int k = 0; k < dataIdx; k++) {
-        pos = body.indexOf(',', pos);
-        if (pos < 0) { pos = fStart; break; }
-        pos++;
-      }
-      int end = pos;
-      while (end < (int)body.length() && body[end] != ',' && body[end] != ']') end++;
-      dniVal = body.substring(pos, end).toFloat();
-    }
+  if (dataIdx >= 0) {
+    irradianciaGHI = doc["hourly"]["shortwave_radiation"][dataIdx];
+    irradiancaDNI  = doc["hourly"]["direct_normal_irradiance"][dataIdx];
+    snprintf(irrHora, sizeof(irrHora), "%02d", horaActual);
+
+    // Condición de cielo desde irradiancia real
+    if      (irradianciaGHI > 700) strcpy(condCielo, "Despejado");
+    else if (irradianciaGHI > 400) strcpy(condCielo, "Parcial");
+    else if (irradianciaGHI > 100) strcpy(condCielo, "Nublado");
+    else                            strcpy(condCielo, "Sin_Sol");
+
+    Serial.printf("[IRR] idx=%d  GHI=%.1f  DNI=%.1f  Cielo=%s\n",
+                  dataIdx, irradianciaGHI, irradiancaDNI, condCielo);
+  } else {
+    Serial.printf("[IRR] Token %s no encontrado en JSON\n", token);
   }
-
-  // Guardar resultados
-  irradianciaGHI = ghiVal;
-  irradiancaDNI  = dniVal;
-  snprintf(irrHora, sizeof(irrHora), "%02d", horaActual);
-
-  // Condición de cielo desde irradiancia real
-  if      (irradianciaGHI > 700) strcpy(condCielo, "Despejado");
-  else if (irradianciaGHI > 400) strcpy(condCielo, "Parcial");
-  else if (irradianciaGHI > 100) strcpy(condCielo, "Nublado");
-  else                            strcpy(condCielo, "Sin_Sol");
-
-  Serial.printf("[IRR] idx=%d  GHI=%.1f  DNI=%.1f  Cielo=%s\n",
-                dataIdx, irradianciaGHI, irradiancaDNI, condCielo);
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -980,7 +946,15 @@ void leerSensores() {
   float vs=0, is=0, ps=0;
   for (int i=0; i<5; i++) {
     float bv = ina219.getBusVoltage_V() + ina219.getShuntVoltage_mV() / 1000.0f;
-    float ic = ina219.getCurrent_mA(); if (ic < 0) ic = 0;
+    float ic = ina219.getCurrent_mA(); 
+    
+    // Validación I2C: Si hay desconexión o ruido, los valores suelen dar NaN en el bus de hardware
+    if (isnan(bv) || isnan(ic)) {
+      Serial.println("[ERROR] INA219 lectura NaN, posible desconexión I2C");
+      bv = 0; ic = 0;
+    }
+    
+    if (ic < 0) ic = 0;
     float pw = bv * ic;                if (pw < 0) pw = 0;  // V×I manual (mejor resolución)
     vs += bv; is += ic; ps += pw;
     server.handleClient(); delay(6);
@@ -1010,32 +984,84 @@ bool tendenciaCaida() {
 // ─────────────────────────────────────────────────────────────────────
 //  CONTROL SERVOS Y LDR
 // ─────────────────────────────────────────────────────────────────────
-void moverH(int a) {
-  anguloH = constrain(a, ANG_H_MIN, ANG_H_MAX); servoH.write(anguloH);
-  unsigned long t = millis();
-  while (millis()-t < 300) { server.handleClient(); delay(5); }
+void moverH(int target) {
+  target = constrain(target, ANG_H_MIN, ANG_H_MAX);
+  if (anguloH == target) return;
+  
+  int step = (target > anguloH) ? 1 : -1;
+  while (anguloH != target) {
+    anguloH += step;
+    servoH.write(anguloH);
+    unsigned long t = millis();
+    while (millis() - t < 15) { // 15ms por grado = movimiento suave (~60 grados por segundo)
+      server.handleClient();
+      delay(1);
+    }
+  }
 }
-void moverV(int a) {
-  anguloV = constrain(a, ANG_V_MIN, ANG_V_MAX); servoV.write(anguloV);
-  unsigned long t = millis();
-  while (millis()-t < 300) { server.handleClient(); delay(5); }
+
+void moverV(int target) {
+  target = constrain(target, ANG_V_MIN, ANG_V_MAX);
+  if (anguloV == target) return;
+  
+  int step = (target > anguloV) ? 1 : -1;
+  while (anguloV != target) {
+    anguloV += step;
+    servoV.write(anguloV);
+    unsigned long t = millis();
+    while (millis() - t < 15) { 
+      server.handleClient();
+      delay(1);
+    }
+  }
 }
 
 void seguimientoLDR() {
   if (estado != NORMAL) return;
-  int tl=analogRead(LDR_TL), tr=analogRead(LDR_TR);
-  int bl=analogRead(LDR_BL), br=analogRead(LDR_BR);
+  
+  // Lectura cruda ADC
+  int tlRaw=analogRead(LDR_TL), trRaw=analogRead(LDR_TR);
+  int blRaw=analogRead(LDR_BL), brRaw=analogRead(LDR_BR);
+  
+  // Primeo de variables EMA si recién arranca
+  if (f_TL == 0 && f_TR == 0 && f_BL == 0 && f_BR == 0) {
+     f_TL = tlRaw; f_TR = trRaw; f_BL = blRaw; f_BR = brRaw;
+  }
+  
+  // Aplicar Filtro Matemático EMA (Exponential Moving Average)
+  f_TL = (EMA_ALPHA * tlRaw) + ((1.0f - EMA_ALPHA) * f_TL);
+  f_TR = (EMA_ALPHA * trRaw) + ((1.0f - EMA_ALPHA) * f_TR);
+  f_BL = (EMA_ALPHA * blRaw) + ((1.0f - EMA_ALPHA) * f_BL);
+  f_BR = (EMA_ALPHA * brRaw) + ((1.0f - EMA_ALPHA) * f_BR);
+
+  int tl=(int)f_TL, tr=(int)f_TR;
+  int bl=(int)f_BL, br=(int)f_BR;
+
   int dH=(tl+bl)-(tr+br), dV=(tl+tr)-(bl+br);
   potenciaAntes = potencia_mW;
   bool movio = false;
-  if (abs(dH) > LDR_TOL) {
-    if (dH > 0) { moverH(anguloH+PASO_GRADOS); strcpy(accionTomada,"+5"); }
-    else        { moverH(anguloH-PASO_GRADOS); strcpy(accionTomada,"-5"); }
+  
+  // Tolerancia dinámica basada en nivel promedio de luz actual
+  int promedioLuz = (tl + tr + bl + br) / 4;
+  int toleranciaDinamica = LDR_TOL + (int)(promedioLuz * 0.03f);
+  
+  // Calcular paso adaptativo (proporcional al error)
+  int pasoH = 1;
+  if(abs(dH) > toleranciaDinamica * 4) pasoH = 5;
+  else if(abs(dH) > toleranciaDinamica * 2) pasoH = 3;
+  
+  int pasoV = 1;
+  if(abs(dV) > toleranciaDinamica * 4) pasoV = 5;
+  else if(abs(dV) > toleranciaDinamica * 2) pasoV = 3;
+
+  if (abs(dH) > toleranciaDinamica) {
+    if (dH > 0) { moverH(anguloH + pasoH); sprintf(accionTomada, "+%d", pasoH); }
+    else        { moverH(anguloH - pasoH); sprintf(accionTomada, "-%d", pasoH); }
     movio = true;
   }
-  if (abs(dV) > LDR_TOL) {
-    if (dV > 0) moverV(anguloV+PASO_GRADOS);
-    else        moverV(anguloV-PASO_GRADOS);
+  if (abs(dV) > toleranciaDinamica) {
+    if (dV > 0) moverV(anguloV + pasoV);
+    else        moverV(anguloV - pasoV);
     movio = true;
   }
   if (!movio) strcpy(accionTomada,"0");

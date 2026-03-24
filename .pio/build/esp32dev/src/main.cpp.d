@@ -255,4 +255,7 @@
  /Users/cristophersaidromerojuarez/.platformio/packages/framework-arduinoespressif32/cores/esp32/esp32-hal-ledc.h \
  .pio/libdeps/esp32dev/Adafruit\ GFX\ Library/Adafruit_GFX.h \
  .pio/libdeps/esp32dev/Adafruit\ GFX\ Library/gfxfont.h \
- .pio/libdeps/esp32dev/Adafruit\ SSD1306/Adafruit_SSD1306.h
+ .pio/libdeps/esp32dev/Adafruit\ SSD1306/Adafruit_SSD1306.h \
+ .pio/libdeps/esp32dev/ArduinoJson/src/ArduinoJson.h \
+ .pio/libdeps/esp32dev/ArduinoJson/src/ArduinoJson.hpp \
+ .pio/libdeps/esp32dev/ArduinoJson/src/ArduinoJson/Configuration.hpp
