@@ -1,6 +1,3 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
 
 @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@400;700;900&display=swap');
 
@@ -97,6 +94,10 @@ tr:hover td { background: rgba(247, 168, 0, .02); }
 .bp:hover { background: #ffbc20; transform: translateY(-1px); }
 .bo { background: transparent; color: var(--c); border: 1px solid var(--c); }
 .bo:hover { background: rgba(0, 200, 255, .1); }
+.bd { background: rgba(255,69,96,.12); color: var(--r); border: 1px solid var(--r); }
+.bd:hover { background: rgba(255,69,96,.22); }
+.bg { background: rgba(0,230,118,.12); color: var(--g); border: 1px solid var(--g); }
+.bg:hover { background: rgba(0,230,118,.22); }
 
 .irow { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 1px solid rgba(26, 40, 64, .4); }
 .ik { font-family: var(--mono); font-size: 10px; color: var(--dim); }

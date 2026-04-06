@@ -3,6 +3,22 @@ import { NextResponse } from 'next/server';
 
 export async function POST(req: Request) {
   try {
+    // Check if recording is enabled
+    let recording = true;
+    try {
+      const ctrl = await pool.query(
+        `SELECT value FROM system_control WHERE key = 'recording'`
+      );
+      if (ctrl.rows.length > 0) recording = ctrl.rows[0].value === 'true';
+    } catch {
+      // system_control table might not exist yet — allow recording
+      recording = true;
+    }
+
+    if (!recording) {
+      return NextResponse.json({ success: false, message: 'Recording is OFF' }, { status: 403 });
+    }
+
     const data = await req.json();
 
     const result = await pool.query(

@@ -716,6 +716,7 @@ unsigned long tBoot   = 0;
 unsigned long tOled   = 0;
 int           oledPag = 0;
 bool primerRegistro   = true;
+bool wifiInicialFetched = false;  // Para hacer el primer fetch de temperatura/irradiancia
 
 // ─────────────────────────────────────────────────────────────────────
 //  OLED
@@ -836,8 +837,11 @@ void fetchTemperatura() {
   Serial.printf("[WEATHER] HTTP code=%d\n", code);
   
   if (code == 200) {
+    String body = http.getString(); // Leer body completo antes de parsear
+    http.end();
+    
     JsonDocument doc;
-    DeserializationError error = deserializeJson(doc, http.getStream());
+    DeserializationError error = deserializeJson(doc, body);
     
     if (!error) {
       if (!doc["current_weather"].isNull()) {
@@ -853,18 +857,18 @@ void fetchTemperatura() {
         else                  strcpy(condCieloWX, "Lluvia");
         
         if (irradianciaGHI <= 0.0f) strcpy(condCielo, condCieloWX);
-        Serial.printf("[WEATHER] Final T=%.1f  WX=%s\n", t, condCieloWX);
+        Serial.printf("[WEATHER] T=%.1f  WX=%s\n", t, condCieloWX);
       } else {
-        Serial.println("[WEATHER] 'current_weather' key NOT found in JSON");
+        Serial.println("[WEATHER] 'current_weather' key NOT found");
       }
     } else {
-      Serial.print("[WEATHER] JSON Parse falló: ");
+      Serial.print("[WEATHER] JSON Parse fallo: ");
       Serial.println(error.c_str());
     }
   } else {
+    http.end();
     Serial.printf("[WEATHER] Error HTTP %d\n", code);
   }
-  http.end();
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -886,12 +890,10 @@ void fetchIrradiancia() {
 
   struct tm ti;
   if (!getLocalTime(&ti)) {
-    Serial.println("[IRR] Sin hora NTP");
-    tIrr = millis() - T_IRRADIANCE + 10000; // reintento en 10s
+    Serial.println("[IRR] Sin hora NTP, skip");
     return;
   }
   int horaActual = ti.tm_hour;
-
   Serial.printf("[IRR] Consultando hora %02d:00...\n", horaActual);
 
   HTTPClient http;
@@ -901,18 +903,19 @@ void fetchIrradiancia() {
   if (code != 200) {
     Serial.printf("[IRR] Error HTTP %d\n", code);
     http.end();
-    tIrr = millis() - T_IRRADIANCE + 60000; // reintento en 1m
     return;
   }
   
-  JsonDocument doc;
-  DeserializationError error = deserializeJson(doc, http.getStream());
+  // Leer body completo antes de parsear para evitar InvalidInput en stream
+  String body = http.getString();
   http.end();
+
+  JsonDocument doc;
+  DeserializationError error = deserializeJson(doc, body);
 
   if (error) {
     Serial.print("[IRR] JSON failed: ");
     Serial.println(error.c_str());
-    tIrr = millis() - T_IRRADIANCE + 60000; // reintento en 1m
     return;
   }
 
@@ -936,7 +939,6 @@ void fetchIrradiancia() {
     irradiancaDNI  = doc["hourly"]["direct_normal_irradiance"][dataIdx];
     snprintf(irrHora, sizeof(irrHora), "%02d", horaActual);
 
-    // Condición de cielo desde irradiancia real
     if      (irradianciaGHI > 700) strcpy(condCielo, "Despejado");
     else if (irradianciaGHI > 400) strcpy(condCielo, "Parcial");
     else if (irradianciaGHI > 100) strcpy(condCielo, "Nublado");
@@ -945,8 +947,7 @@ void fetchIrradiancia() {
     Serial.printf("[IRR] idx=%d  GHI=%.1f  DNI=%.1f  Cielo=%s\n",
                   dataIdx, irradianciaGHI, irradiancaDNI, condCielo);
   } else {
-    Serial.printf("[IRR] Token %s no encontrado en JSON\n", token);
-    tIrr = millis() - T_IRRADIANCE + 60000; // reintento en 1m
+    Serial.printf("[IRR] Token %s no encontrado\n", token);
   }
 }
 
@@ -1119,40 +1120,9 @@ void initCSV() {
 }
 
 void guardarCSV() {
-  File f = LittleFS.open("/log.csv", "a");
-  if (!f) return;
-
-  struct tm ti;
-  char fecha[12]="----/--/--", hora[10]="--:--:--";
-  if (getLocalTime(&ti)) {
-    strftime(fecha, sizeof(fecha), "%Y/%m/%d", &ti);
-    strftime(hora,  sizeof(hora),  "%H:%M:%S", &ti);
-  }
-
-  // GHI real de Open-Meteo; si aún no hay dato, estimar desde potencia
-  float ghiParaCSV = irradianciaGHI;
-  float dniParaCSV = irradiancaDNI;
-  if (ghiParaCSV <= 0.0f) {
-    float factorTemp = 1.0f + COEF_TEMP * (temperatura - TEMP_REF);
-    if (factorTemp <= 0) factorTemp = 0.001f;
-    ghiParaCSV = (potencia_mW / factorTemp) * (1000.0f / 2000.0f);
-    // recalcular condCielo con estimado
-    if      (ghiParaCSV > 700) strcpy(condCielo, "Despejado");
-    else if (ghiParaCSV > 400) strcpy(condCielo, "Parcial");
-    else if (ghiParaCSV > 100) strcpy(condCielo, "Nublado");
-    else                        strcpy(condCielo, "Sin_Sol");
-    Serial.println("[CSV] GHI estimado (fallback)");
-  }
-
-  registroNum++;
-  f.printf("%d,%s,%s,%.1f,%.1f,%.2f,%s,%.4f,%.3f,%.3f,%d,%d,%.3f,%s,%s,%d\n",
-    registroNum, fecha, hora,
-    ghiParaCSV, dniParaCSV,
-    temperatura, condCielo,
-    voltaje, corriente_mA,
-    potenciaAntes, anguloH, anguloV,
-    potenciaDespues, accionTomada, ESTADO_STR[estado], nEnfriamientos);
-  f.close();
+  // CSV local deshabilitado: todos los datos van a Vercel/PostgreSQL
+  // El LittleFS estaba lleno causando crash (IntegerDivideByZero en lfs_alloc)
+  Serial.println("[CSV] Registro omitido (datos en Vercel)");
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -1278,12 +1248,16 @@ void setup() {
 
   Wire.begin(21, 22);
 
+  // ── OLED: pantalla de arranque ──────────────────────────────────────
   if (!oled.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
     oledOK = false;
   } else {
     oledOK = true;
-    oled.clearDisplay(); oled.setTextColor(SSD1306_WHITE); oled.setTextSize(1);
+    oled.clearDisplay();
+    oled.setTextColor(SSD1306_WHITE);
+    oled.setTextSize(1);
     oled.setCursor(20, 20); oled.print("SOLAR TRACKER v5");
+    oled.setCursor(0, 36);  oled.print("Iniciando...");
     oled.display();
   }
 
@@ -1300,34 +1274,65 @@ void setup() {
   if (!LittleFS.begin(true)) { LittleFS.format(); LittleFS.begin(); }
   initCSV();
 
+  // ── WiFi: intentar conectar con feedback en OLED ────────────────────
+  WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASS);
-  int n = 0;
-  while (WiFi.status() != WL_CONNECTED && n < 24) { delay(500); n++; }
+  Serial.print("[WiFi] Conectando");
+
+  unsigned long wifiStart = millis();
+  int dot = 0;
+  while (WiFi.status() != WL_CONNECTED && millis() - wifiStart < 12000) {
+    delay(250);
+    Serial.print(".");
+    // Actualizar OLED con progreso
+    if (oledOK && dot % 4 == 0) {
+      oled.clearDisplay();
+      oled.setTextColor(SSD1306_WHITE);
+      oled.setTextSize(1);
+      oled.fillRect(0, 0, 128, 13, SSD1306_WHITE);
+      oled.setTextColor(SSD1306_BLACK);
+      oled.setCursor(16, 3); oled.print("SOLAR TRACKER v5");
+      oled.setTextColor(SSD1306_WHITE);
+      oled.setCursor(0, 18); oled.print("Conectando WiFi...");
+      oled.setCursor(0, 30); oled.print(WIFI_SSID);
+      int prog = (int)((millis() - wifiStart) / 120);
+      oled.drawRect(2, 50, 124, 8, SSD1306_WHITE);
+      oled.fillRect(2, 50, constrain(prog, 0, 124), 8, SSD1306_WHITE);
+      oled.display();
+    }
+    dot++;
+  }
 
   if (WiFi.status() == WL_CONNECTED) {
-    configTime(-6 * 3600, 0, "pool.ntp.org");
-    Serial.print("[NTP] Sincronizando hora...");
-    struct tm ti;
-    int retries = 0;
-    while (!getLocalTime(&ti) && retries < 20) {
-      Serial.print(".");
-      delay(500);
-      retries++;
-    }
-    Serial.println(retries < 20 ? " OK" : " FALLO");
-
-    fetchTemperatura();
-    tIrr = millis();
-    fetchIrradiancia();      // primera consulta al arrancar
-    tWeather = millis();
-    // tVercel = 0 → fuerza el primer envío en la primera iteración del loop (30s)
-    tVercel = millis() - 29000UL; // envía al segundo 1 del loop
+    Serial.printf(" OK — IP: %s\n", WiFi.localIP().toString().c_str());
+    // NTP async: configurar sin bloquear
+    configTime(-6 * 3600, 0, "pool.ntp.org", "time.cloudflare.com");
+    Serial.println("[NTP] Configurado (sync en background)");
+    // Los fetches de temperatura e irradiancia se hacen en loop()
+    // para no bloquear el arranque
+    wifiInicialFetched = false;
+    tWeather = 0;   // fuerza fetch de temperatura en primer loop
+    tIrr     = 0;   // fuerza fetch de irradiancia en primer loop
+    tVercel  = 0;   // fuerza primer envio a Vercel a los 30s del loop
   } else {
+    Serial.println(" TIMEOUT — modo AP");
     WiFi.mode(WIFI_AP);
     WiFi.softAP(AP_SSID, AP_PASS);
+    if (oledOK) {
+      oled.clearDisplay();
+      oled.setTextColor(SSD1306_WHITE);
+      oled.setTextSize(1);
+      oled.setCursor(0, 0);  oled.print("Modo AP activo");
+      oled.setCursor(0, 16); oled.print(AP_SSID);
+      oled.setCursor(0, 28); oled.print("Pass: solar1234");
+      oled.setCursor(0, 40); oled.print("IP: 192.168.4.1");
+      oled.display();
+    }
   }
 
   configurarRutas();
+  // Marcar que el boot completo termino
+  Serial.println("[BOOT] Setup completo, entrando al loop");
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -1364,8 +1369,9 @@ void loop() {
     }
   }
 
-  // Enviar POST a Vercel cada 30 seg
-  if (now - tVercel >= 30000UL) {
+  // Enviar POST a Vercel cada 30 seg (solo si hay WiFi)
+  if (WiFi.status() == WL_CONNECTED &&
+      (tVercel == 0 || now - tVercel >= 30000UL)) {
     tVercel = now;
     enviarDatosVercel();
   }
@@ -1379,8 +1385,9 @@ void loop() {
     fetchTemperatura();
   }
 
-  // Irradiancia cada hora
-  if (now - tIrr >= T_IRRADIANCE) {
+  // Irradiancia cada 15 min, o inmediatamente si aún no se ha pedido
+  if (WiFi.status() == WL_CONNECTED &&
+      (tIrr == 0 || now - tIrr >= T_IRRADIANCE)) {
     tIrr = now;
     fetchIrradiancia();
   }
