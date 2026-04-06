@@ -5,28 +5,49 @@ import Chart from 'chart.js/auto';
 const ESTADOS = ['NORMAL', 'ENFRIANDO', 'RECUPERANDO', 'SIN_SOL'];
 const ECLS = ['tn', 'te', 'te', 'ts'];
 
+interface DayRecord {
+  fecha: string;
+  registros: number;
+  primer_registro: string;
+  ultimo_registro: string;
+}
+
 export default function Dashboard() {
   const [data, setData] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [isFiltering, setIsFiltering] = useState<boolean>(false);
+  const [availableDays, setAvailableDays] = useState<DayRecord[]>([]);
+  const [selectedDay, setSelectedDay] = useState<string>('');
+  const [showDayPicker, setShowDayPicker] = useState<boolean>(false);
   const chartRef = useRef<HTMLCanvasElement>(null);
   const gaugeRef = useRef<HTMLCanvasElement>(null);
   const chartInstance = useRef<any>(null);
 
-  const fetchSensorData = async (filterMode = isFiltering) => {
+  // Fetch available days from DB
+  const fetchAvailableDays = async () => {
+    try {
+      const res = await fetch('/api/days');
+      const json = await res.json();
+      if (json.success) setAvailableDays(json.days);
+    } catch (err) {
+      console.error('Failed to fetch days', err);
+    }
+  };
+
+  const fetchSensorData = async (filterMode = isFiltering, start = startDate, end = endDate) => {
     try {
       let url = '/api/data';
-      if (filterMode && startDate && endDate) {
-        const startIso = new Date(startDate).toISOString();
-        const endIso = new Date(endDate).toISOString();
+      if (filterMode && start && end) {
+        const startIso = new Date(start).toISOString();
+        const endIso = new Date(end).toISOString();
         url += `?start=${encodeURIComponent(startIso)}&end=${encodeURIComponent(endIso)}`;
       }
       const res = await fetch(url);
       const json = await res.json();
-      if (json.success && json.latest) {
-        setData(json.latest);
+      if (json.success) {
+        if (json.latest) setData(json.latest);
         setHistory(json.history);
       }
     } catch (err) {
@@ -34,14 +55,50 @@ export default function Dashboard() {
     }
   };
 
+  // Select a specific day from the day picker
+  const selectDay = (fecha: string) => {
+    const start = `${fecha}T00:00`;
+    const end = `${fecha}T23:59`;
+    setStartDate(start);
+    setEndDate(end);
+    setSelectedDay(fecha);
+    setIsFiltering(true);
+    setShowDayPicker(false);
+    fetchSensorData(true, start, end);
+  };
+
+  const clearFilter = () => {
+    setIsFiltering(false);
+    setStartDate('');
+    setEndDate('');
+    setSelectedDay('');
+    fetchSensorData(false, '', '');
+  };
+
+  // Build CSV download URL respecting current filter
+  const getCsvUrl = () => {
+    if (isFiltering && startDate && endDate) {
+      const s = encodeURIComponent(new Date(startDate).toISOString());
+      const e = encodeURIComponent(new Date(endDate).toISOString());
+      return `/api/download?start=${s}&end=${e}`;
+    }
+    return '/api/download';
+  };
+
   useEffect(() => {
     fetchSensorData();
+    fetchAvailableDays();
     const interval = setInterval(() => {
-      // Solo actualizamos automáticamente si no estamos viendo un historial específico
-      if (!isFiltering) fetchSensorData(false);
-    }, 3000);
+      if (!isFiltering) fetchSensorData(false, '', '');
+    }, 5000);
     return () => clearInterval(interval);
-  }, [startDate, endDate, isFiltering]);
+  }, []);
+
+  // Refresh available days every 2 min
+  useEffect(() => {
+    const interval = setInterval(fetchAvailableDays, 120000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     if (chartRef.current && history.length > 0) {
@@ -49,7 +106,7 @@ export default function Dashboard() {
 
       const labels = history.map(h => {
         const d = new Date(h.created_at);
-        return `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
+        return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
       });
 
       const powData = history.map(h => parseFloat(h.p) || 0);
@@ -125,7 +182,7 @@ export default function Dashboard() {
           interaction: { mode: 'index', intersect: false },
           scales: {
             x: {
-              ticks: { color: '#4a6078', font: { family: 'Share Tech Mono', size: 8 }, maxTicksLimit: 10 },
+              ticks: { color: '#4a6078', font: { family: 'Share Tech Mono', size: 8 }, maxTicksLimit: 12 },
               grid: { color: 'rgba(26,40,64,0.5)' }
             },
             yP: {
@@ -181,7 +238,6 @@ export default function Dashboard() {
       });
     }
   }, [history]);
-
 
   useEffect(() => {
     if (gaugeRef.current && data) {
@@ -285,17 +341,17 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* ROW 2: IRRADIANCE + CHART */}
+        {/* ROW 2: IRRADIANCE — datos de la BD o del último registro */}
         <div className="card wide">
           <div className="ptitle"><span>&#9788; IRRADIANCIA SOLAR (GHI)</span><span style={{ color: 'var(--dim)' }}>Open-Meteo API</span></div>
           <div className="irr-grid">
             <div className="irr-col">
               <label>SHORTWAVE GHI</label>
-              <div className="irr-val">{d.ghi.toFixed(0)}<span className="cunit">W/m&sup2;</span></div>
+              <div className="irr-val">{parseFloat(d.ghi || 0).toFixed(0)}<span className="cunit">W/m&sup2;</span></div>
             </div>
             <div className="irr-col">
               <label>DNI NORMAL</label>
-              <div className="irr-val-sm">{d.dni.toFixed(0)} <span style={{ fontSize: '11px', color: 'var(--dim)' }}>W/m&sup2;</span></div>
+              <div className="irr-val-sm">{parseFloat(d.dni || 0).toFixed(0)} <span style={{ fontSize: '11px', color: 'var(--dim)' }}>W/m&sup2;</span></div>
             </div>
             <div className="irr-col">
               <label>HORA DATO</label>
@@ -303,28 +359,95 @@ export default function Dashboard() {
             </div>
             <div className="irr-col">
               <label>CIELO</label>
-              <div style={{ fontFamily: 'var(--mono)', fontSize: '13px', color: 'var(--c)' }}>{d.cielo}</div>
+              <div style={{ fontFamily: 'var(--mono)', fontSize: '13px', color: 'var(--c)' }}>{d.cielo || '---'}</div>
             </div>
           </div>
-          <div className="bar" style={{ marginTop: '12px' }}><div className="barfill" style={{ width: `${Math.min(d.ghi / 1200 * 100, 100)}%` }}></div></div>
+          <div className="bar" style={{ marginTop: '12px' }}><div className="barfill" style={{ width: `${Math.min(parseFloat(d.ghi || 0) / 1200 * 100, 100)}%` }}></div></div>
         </div>
 
+        {/* ROW 3: CHART WITH DAY FILTER */}
         <div className="card wide">
           <div className="ptitle">
             <span>&#11015; VOLTAJE · CORRIENTE · POTENCIA · IRRADIANCIA — BD</span>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <input type="datetime-local" style={{ background: 'var(--bg)', color: 'white', border: '1px solid var(--border)', padding: '5px', fontSize: '10px', fontFamily: 'var(--mono)', borderRadius: '4px' }} value={startDate} onChange={e => setStartDate(e.target.value)} />
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+              {/* Day selector dropdown */}
+              <div style={{ position: 'relative' }}>
+                <button
+                  className="btn bp"
+                  style={{ padding: '6px 12px', background: showDayPicker ? 'var(--c)' : undefined }}
+                  onClick={() => setShowDayPicker(p => !p)}
+                >
+                  {selectedDay ? `📅 ${selectedDay}` : '📅 DÍAS'}
+                </button>
+                {showDayPicker && (
+                  <div style={{
+                    position: 'absolute', top: '100%', left: 0, zIndex: 100,
+                    background: '#111820', border: '1px solid #1a2840',
+                    minWidth: '220px', maxHeight: '250px', overflowY: 'auto',
+                    borderRadius: '4px', marginTop: '4px', boxShadow: '0 4px 20px rgba(0,0,0,0.6)'
+                  }}>
+                    {availableDays.length === 0 && (
+                      <div style={{ padding: '12px', color: 'var(--dim)', fontFamily: 'var(--mono)', fontSize: '10px' }}>
+                        Sin días registrados
+                      </div>
+                    )}
+                    {availableDays.map(day => (
+                      <div
+                        key={day.fecha}
+                        onClick={() => selectDay(day.fecha)}
+                        style={{
+                          padding: '8px 14px', cursor: 'pointer',
+                          fontFamily: 'var(--mono)', fontSize: '11px',
+                          color: day.fecha === selectedDay ? 'var(--c)' : 'var(--tx)',
+                          borderBottom: '1px solid #1a2840',
+                          display: 'flex', justifyContent: 'space-between',
+                          background: day.fecha === selectedDay ? 'rgba(0,200,255,0.08)' : 'transparent'
+                        }}
+                        onMouseEnter={e => (e.currentTarget.style.background = 'rgba(0,200,255,0.06)')}
+                        onMouseLeave={e => (e.currentTarget.style.background = day.fecha === selectedDay ? 'rgba(0,200,255,0.08)' : 'transparent')}
+                      >
+                        <span>{day.fecha}</span>
+                        <span style={{ color: 'var(--dim)', fontSize: '9px' }}>{day.registros} reg.</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <input
+                type="datetime-local"
+                style={{ background: 'var(--bg)', color: 'white', border: '1px solid var(--border)', padding: '5px', fontSize: '10px', fontFamily: 'var(--mono)', borderRadius: '4px' }}
+                value={startDate}
+                onChange={e => setStartDate(e.target.value)}
+              />
               <span style={{ color: 'var(--dim)', fontSize: '10px' }}>a</span>
-              <input type="datetime-local" style={{ background: 'var(--bg)', color: 'white', border: '1px solid var(--border)', padding: '5px', fontSize: '10px', fontFamily: 'var(--mono)', borderRadius: '4px' }} value={endDate} onChange={e => setEndDate(e.target.value)} />
-              <button className="btn bp" style={{ padding: '6px 12px' }} onClick={() => { setIsFiltering(true); fetchSensorData(true); }}>FILTRAR</button>
-              <button className="btn bd" style={{ padding: '6px 12px' }} onClick={() => { setIsFiltering(false); setStartDate(''); setEndDate(''); fetchSensorData(false); }}>LIMPIAR</button>
+              <input
+                type="datetime-local"
+                style={{ background: 'var(--bg)', color: 'white', border: '1px solid var(--border)', padding: '5px', fontSize: '10px', fontFamily: 'var(--mono)', borderRadius: '4px' }}
+                value={endDate}
+                onChange={e => setEndDate(e.target.value)}
+              />
+              <button
+                className="btn bp"
+                style={{ padding: '6px 12px' }}
+                onClick={() => { setIsFiltering(true); fetchSensorData(true); }}
+              >
+                FILTRAR
+              </button>
+              <button
+                className="btn bd"
+                style={{ padding: '6px 12px' }}
+                onClick={clearFilter}
+              >
+                LIMPIAR
+              </button>
               <span style={{ color: 'var(--dim)', marginLeft: '10px' }}>{history.length} pts</span>
             </div>
           </div>
           <canvas ref={chartRef} height={180}></canvas>
         </div>
 
-        {/* ROW 3: GAUGE + COMPASS + ELEVATION */}
+        {/* ROW 4: GAUGE + COMPASS + ELEVATION */}
         <div className="card">
           <div className="ptitle"><span>&#9711; EFICIENCIA TÉRMICA</span></div>
           <div className="gwrap">
@@ -374,41 +497,66 @@ export default function Dashboard() {
           <div className="irow"><span className="ik">ESTADO</span><span className="iv">{data ? "ONLINE" : "OFFLINE"}</span></div>
           <div className="irow"><span className="ik">ENFRIAMIENTOS</span><span className="iv ivg">{d.ec}</span></div>
           <div className="irow"><span className="ik">MEJOR POT.</span><span className="iv ivg">{d.mp.toFixed(2)} mW</span></div>
-          <div className="irow"><span className="ik">REGISTROS</span><span className="iv">{history.length} max limit 80</span></div>
+          <div className="irow"><span className="ik">DÍAS REGISTR.</span><span className="iv ivg">{availableDays.length}</span></div>
+          <div className="irow"><span className="ik">PUNTOS VISTA</span><span className="iv">{history.length}</span></div>
         </div>
 
-        {/* ROW 4: TABLE */}
+        {/* ROW 5: TABLE */}
         <div className="card wide">
           <div className="ptitle">
             <span>&#8862; REGISTRO DE DATOS BACKEND</span>
-            <a href="/api/download" className="btn bo" style={{textDecoration:'none', padding:'7px 16px', borderRadius:'4px', fontFamily:'var(--mono)', fontSize:'10px', letterSpacing:'.1em', textTransform:'uppercase', color:'var(--c)', border:'1px solid var(--c)'}}>&#8595; CSV</a>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              {isFiltering && selectedDay && (
+                <span style={{ color: 'var(--y)', fontFamily: 'var(--mono)', fontSize: '10px' }}>
+                  📅 {selectedDay}
+                </span>
+              )}
+              <a
+                href={getCsvUrl()}
+                className="btn bo"
+                style={{
+                  textDecoration: 'none', padding: '7px 16px', borderRadius: '4px',
+                  fontFamily: 'var(--mono)', fontSize: '10px', letterSpacing: '.1em',
+                  textTransform: 'uppercase', color: 'var(--c)', border: '1px solid var(--c)'
+                }}
+              >
+                &#8595; CSV {isFiltering && selectedDay ? `(${selectedDay})` : '(TODOS)'}
+              </a>
+            </div>
           </div>
           <div className="twrap">
             <table>
               <thead>
                 <tr>
-                  <th>ID</th><th>HORA</th><th>V (V)</th><th>I (mA)</th>
+                  <th>ID</th><th>FECHA</th><th>HORA</th><th>V (V)</th><th>I (mA)</th>
                   <th>P (mW)</th><th>T (&deg;C)</th><th>GHI (W/m&sup2;)</th>
-                  <th>AH&deg;</th><th>AV&deg;</th><th>LDR(TL/TR/BL/BR)</th><th>ESTADO</th>
+                  <th>AH&deg;</th><th>AV&deg;</th><th>ESTADO</th>
                 </tr>
               </thead>
               <tbody>
-                {!data && <tr><td colSpan={10} style={{ textAlign: 'center', color: 'var(--dim)', padding: '20px' }}>Esperando a Vercel/Postgres...</td></tr>}
+                {history.length === 0 && (
+                  <tr><td colSpan={11} style={{ textAlign: 'center', color: 'var(--dim)', padding: '20px' }}>
+                    {isFiltering ? 'Sin datos para el rango seleccionado' : 'Esperando a Vercel/Postgres...'}
+                  </td></tr>
+                )}
                 {[...history].reverse().map((row: any) => {
-                  const d = new Date(row.created_at);
-                  const hora = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}:${d.getSeconds().toString().padStart(2, '0')}`;
+                  const dt = new Date(row.created_at);
+                  const fecha = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+                  const hora = `${dt.getHours().toString().padStart(2, '0')}:${dt.getMinutes().toString().padStart(2, '0')}:${dt.getSeconds().toString().padStart(2, '0')}`;
                   return (
                     <tr key={row.id}>
                       <td>{row.id}</td>
+                      <td style={{ fontSize: '9px', color: 'var(--dim)' }}>{fecha}</td>
                       <td>{hora}</td>
-                      <td>{row.v.toFixed(3)}</td>
-                      <td>{row.i.toFixed(2)}</td>
-                      <td>{row.p.toFixed(2)}</td>
-                      <td>{row.t.toFixed(1)}</td>
-                      <td>{row.ghi.toFixed(0)}</td>
+                      <td>{parseFloat(row.v).toFixed(3)}</td>
+                      <td>{parseFloat(row.i).toFixed(2)}</td>
+                      <td>{parseFloat(row.p).toFixed(2)}</td>
+                      <td>{parseFloat(row.t).toFixed(1)}</td>
+                      <td style={{ color: parseFloat(row.ghi) > 100 ? 'var(--y)' : 'var(--dim)' }}>
+                        {parseFloat(row.ghi).toFixed(0)}
+                      </td>
                       <td>{row.ah}</td>
                       <td>{row.av}</td>
-                      <td style={{fontSize:'9px', color:'var(--dim)'}}>{row.ltl}/{row.ltr}/{row.lbl}/{row.lbr}</td>
                       <td><span className={`tag ${ECLS[row.st]}`}>{ESTADOS[row.st]}</span></td>
                     </tr>
                   )

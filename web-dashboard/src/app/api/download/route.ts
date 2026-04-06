@@ -3,11 +3,25 @@ import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const result = await pool.query(
-      `SELECT * FROM log_data ORDER BY id ASC`
-    );
+    const { searchParams } = new URL(request.url);
+    const start = searchParams.get('start');
+    const end = searchParams.get('end');
+
+    let historyQuery = `SELECT * FROM log_data ORDER BY id ASC`;
+    const queryParams: any[] = [];
+    
+    if (start && end) {
+      historyQuery = `
+        SELECT * FROM log_data 
+        WHERE created_at >= $1 AND created_at <= $2 
+        ORDER BY id ASC
+      `;
+      queryParams.push(start, end);
+    }
+
+    const result = await pool.query(historyQuery, queryParams);
 
     const rows = result.rows;
     if (rows.length === 0) {

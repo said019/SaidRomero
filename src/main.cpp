@@ -624,7 +624,7 @@ float irradianciaGHI  = 0.0f;
 float irradiancaDNI   = 0.0f;
 char  irrHora[6]      = "--";
 unsigned long tIrr    = 0;
-#define T_IRRADIANCE  3600000UL   // cada hora
+#define T_IRRADIANCE  900000UL    // cada 15 min (era 1h)
 
 // ─────────────────────────────────────────────────────────────────────
 //  PINOUT
@@ -887,6 +887,7 @@ void fetchIrradiancia() {
   struct tm ti;
   if (!getLocalTime(&ti)) {
     Serial.println("[IRR] Sin hora NTP");
+    tIrr = millis() - T_IRRADIANCE + 10000; // reintento en 10s
     return;
   }
   int horaActual = ti.tm_hour;
@@ -900,6 +901,7 @@ void fetchIrradiancia() {
   if (code != 200) {
     Serial.printf("[IRR] Error HTTP %d\n", code);
     http.end();
+    tIrr = millis() - T_IRRADIANCE + 60000; // reintento en 1m
     return;
   }
   
@@ -910,6 +912,7 @@ void fetchIrradiancia() {
   if (error) {
     Serial.print("[IRR] JSON failed: ");
     Serial.println(error.c_str());
+    tIrr = millis() - T_IRRADIANCE + 60000; // reintento en 1m
     return;
   }
 
@@ -943,6 +946,7 @@ void fetchIrradiancia() {
                   dataIdx, irradianciaGHI, irradiancaDNI, condCielo);
   } else {
     Serial.printf("[IRR] Token %s no encontrado en JSON\n", token);
+    tIrr = millis() - T_IRRADIANCE + 60000; // reintento en 1m
   }
 }
 
@@ -1302,12 +1306,22 @@ void setup() {
 
   if (WiFi.status() == WL_CONNECTED) {
     configTime(-6 * 3600, 0, "pool.ntp.org");
-    delay(1200);             // tiempo para que NTP sincronice
+    Serial.print("[NTP] Sincronizando hora...");
+    struct tm ti;
+    int retries = 0;
+    while (!getLocalTime(&ti) && retries < 20) {
+      Serial.print(".");
+      delay(500);
+      retries++;
+    }
+    Serial.println(retries < 20 ? " OK" : " FALLO");
+
     fetchTemperatura();
-    fetchIrradiancia();      // primera consulta al arrancar
     tIrr = millis();
+    fetchIrradiancia();      // primera consulta al arrancar
     tWeather = millis();
-    tVercel = millis();
+    // tVercel = 0 → fuerza el primer envío en la primera iteración del loop (30s)
+    tVercel = millis() - 29000UL; // envía al segundo 1 del loop
   } else {
     WiFi.mode(WIFI_AP);
     WiFi.softAP(AP_SSID, AP_PASS);
@@ -1350,8 +1364,8 @@ void loop() {
     }
   }
 
-  // Enviar POST a Vercel cada 2 min (120000 ms)
-  if (now - tVercel >= 120000UL) {
+  // Enviar POST a Vercel cada 30 seg
+  if (now - tVercel >= 30000UL) {
     tVercel = now;
     enviarDatosVercel();
   }
