@@ -400,14 +400,73 @@ export default function Dashboard() {
 
         {/* ══ TABLA ══════════════════════════════════════════════════ */}
         <div className="card wide">
-          <div className="ptitle">
-            <span>⊞ REGISTRO DE DATOS BACKEND
-              {filtered && selDay && <span style={{color:'var(--y)',marginLeft:'8px',fontSize:'10px'}}>— {selDay}</span>}
-            </span>
-            <a href={csvUrl()} download
-              style={{padding:'6px 16px',borderRadius:'4px',border:'1px solid var(--c)',color:'var(--c)',fontFamily:'var(--mono)',fontSize:'10px',letterSpacing:'.08em',textDecoration:'none',background:'rgba(0,200,255,.07)'}}>
-              ↓ CSV {filtered && selDay ? `(${selDay})` : '(TODOS)'}
-            </a>
+          {/* ─── Header con filtros completos ─────────────────────── */}
+          <div style={{marginBottom:'10px'}}>
+            {/* Fila 1: título + CSV */}
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'10px'}}>
+              <span style={{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--y)',letterSpacing:'.1em',textTransform:'uppercase'}}>
+                ⊞ REGISTRO DE DATOS BACKEND
+                {filtered && selDay && <span style={{color:'var(--tx)',marginLeft:'8px',fontWeight:400}}>— {selDay}</span>}
+              </span>
+              <a href={csvUrl()} download
+                style={{padding:'5px 16px',borderRadius:'4px',border:'1px solid var(--c)',color:'var(--c)',fontFamily:'var(--mono)',fontSize:'10px',letterSpacing:'.08em',textDecoration:'none',background:'rgba(0,200,255,.07)',flexShrink:0}}>
+                ↓ CSV {filtered && selDay ? `(${selDay})` : '(TODOS)'}
+              </a>
+            </div>
+            {/* Fila 2: controles de filtro */}
+            <div style={{display:'flex',gap:'6px',alignItems:'center',flexWrap:'wrap',padding:'8px 10px',background:'rgba(247,168,0,.04)',border:'1px solid rgba(247,168,0,.2)',borderRadius:'4px'}}>
+              {/* DIAS dropdown */}
+              <div style={{position:'relative',display:'inline-block',flexShrink:0}}>
+                <button
+                  onClick={()=>setShowDays(v=>!v)}
+                  style={{padding:'5px 12px',borderRadius:'3px',background:filtered?'var(--y)':'rgba(247,168,0,.1)',color:filtered?'#000':'var(--y)',border:'1px solid var(--y)',fontFamily:'var(--mono)',fontSize:'9px',fontWeight:700,cursor:'pointer',letterSpacing:'.08em',whiteSpace:'nowrap'}}
+                >
+                  📅 {selDay ? selDay : 'DÍAS'}
+                </button>
+                {showDays && (
+                  <div style={{position:'absolute',top:'100%',left:0,zIndex:300,background:'#0d1520',border:'1px solid var(--border)',borderRadius:'4px',minWidth:'210px',maxHeight:'260px',overflowY:'auto',marginTop:'3px',boxShadow:'0 8px 32px rgba(0,0,0,.8)'}}>
+                    <div
+                      onClick={()=>clearFilter()}
+                      style={{padding:'8px 14px',cursor:'pointer',fontFamily:'var(--mono)',fontSize:'10px',color:'var(--y)',borderBottom:'1px solid var(--border)',background:'rgba(247,168,0,.06)'}}
+                    >
+                      ▶ EN VIVO (últimos datos)
+                    </div>
+                    {days.map((day:any)=>(
+                      <div
+                        key={day.fecha}
+                        onClick={()=>pickDay(day.fecha)}
+                        style={{padding:'8px 14px',cursor:'pointer',fontFamily:'var(--mono)',fontSize:'10px',color: selDay===day.fecha?'var(--y)':'var(--tx)',borderBottom:'1px solid rgba(26,40,64,.4)',display:'flex',justifyContent:'space-between',alignItems:'center',background:selDay===day.fecha?'rgba(247,168,0,.08)':'transparent'}}
+                        onMouseEnter={e=>(e.currentTarget.style.background='rgba(247,168,0,.07)')}
+                        onMouseLeave={e=>(e.currentTarget.style.background=selDay===day.fecha?'rgba(247,168,0,.08)':'transparent')}
+                      >
+                        <span>{day.fecha}</span>
+                        <span style={{color:'var(--dim)',fontSize:'9px'}}>{day.registros} reg</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Inputs de rango */}
+              <input type="datetime-local" value={startDt} onChange={e=>setStartDt(e.target.value)}
+                style={{background:'var(--bg)',color:'#ddd',border:'1px solid var(--border)',padding:'4px 6px',fontSize:'9px',fontFamily:'var(--mono)',borderRadius:'3px',flex:'1',minWidth:'140px',maxWidth:'175px'}}/>
+              <span style={{color:'var(--dim)',fontSize:'10px',flexShrink:0}}>A</span>
+              <input type="datetime-local" value={endDt} onChange={e=>setEndDt(e.target.value)}
+                style={{background:'var(--bg)',color:'#ddd',border:'1px solid var(--border)',padding:'4px 6px',fontSize:'9px',fontFamily:'var(--mono)',borderRadius:'3px',flex:'1',minWidth:'140px',maxWidth:'175px'}}/>
+              <button onClick={applyRange}
+                style={{padding:'5px 12px',borderRadius:'3px',background:'var(--y)',color:'#000',border:'none',fontFamily:'var(--mono)',fontSize:'9px',fontWeight:700,cursor:'pointer',letterSpacing:'.08em',flexShrink:0}}>
+                FILTRAR
+              </button>
+              <button onClick={clearFilter}
+                style={{padding:'5px 12px',borderRadius:'3px',background:'transparent',color:'var(--tx)',border:'1px solid var(--border)',fontFamily:'var(--mono)',fontSize:'9px',cursor:'pointer',letterSpacing:'.08em',flexShrink:0}}>
+                LIMPIAR
+              </button>
+              {filtered && (
+                <span style={{color:'var(--y)',fontFamily:'var(--mono)',fontSize:'9px',marginLeft:'4px',whiteSpace:'nowrap'}}>
+                  ● {history.length} reg {selDay ? `(${selDay})` : 'en rango'}
+                </span>
+              )}
+            </div>
           </div>
           <div className="twrap" style={{maxHeight:'350px'}}>
             <table>
