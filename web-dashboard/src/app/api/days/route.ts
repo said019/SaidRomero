@@ -8,13 +8,11 @@ export async function GET() {
     // Returns all unique dates that have records, ordered descending
     const result = await pool.query(`
       SELECT 
-        DATE(created_at AT TIME ZONE 'America/Mexico_City') AS fecha,
-        COUNT(*) AS registros,
-        MIN(created_at) AS primer_registro,
-        MAX(created_at) AS ultimo_registro
+        TO_CHAR(DATE(created_at AT TIME ZONE 'America/Mexico_City'), 'YYYY-MM-DD') AS fecha,
+        COUNT(*) AS registros
       FROM log_data
       GROUP BY DATE(created_at AT TIME ZONE 'America/Mexico_City')
-      ORDER BY fecha DESC
+      ORDER BY DATE(created_at AT TIME ZONE 'America/Mexico_City') DESC
     `);
 
     return NextResponse.json({ success: true, days: result.rows });

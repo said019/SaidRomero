@@ -74,9 +74,10 @@ export default function Dashboard() {
   }
 
   function pickDay(fecha: string) {
-    const s = `${fecha}T00:00`;
-    const e = `${fecha}T23:59`;
-    setSelDay(fecha);
+    const dateOnly = fecha.slice(0, 10); // always "YYYY-MM-DD", strips any ISO tail
+    const s = `${dateOnly}T00:00`;
+    const e = `${dateOnly}T23:59`;
+    setSelDay(dateOnly);
     setStartDt(s);
     setEndDt(e);
     setFiltered(true);
