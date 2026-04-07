@@ -714,6 +714,8 @@ unsigned long tVercel = 0;
 unsigned long tFrio   = 0;
 unsigned long tBoot   = 0;
 unsigned long tOled   = 0;
+unsigned long tWifiCheck = 0;   // reconexion WiFi automatica
+int           wifiRetries   = 0; // intentos fallidos de reconexion
 int           oledPag = 0;
 bool primerRegistro   = true;
 bool wifiInicialFetched = false;  // Para hacer el primer fetch de temperatura/irradiancia
@@ -1341,6 +1343,65 @@ void setup() {
 void loop() {
   server.handleClient();
   unsigned long now = millis();
+
+  // ── Reconexion WiFi automática cada 30 s si se pierde ──
+  if (WiFi.status() != WL_CONNECTED && now - tWifiCheck >= 30000UL) {
+    tWifiCheck = now;
+    wifiRetries++;
+    Serial.printf("[WiFi] Perdido. Intento %d de reconectar...\n", wifiRetries);
+
+    // Mostrar en OLED que está intentando reconectar
+    if (oledOK) {
+      oled.clearDisplay();
+      oled.setTextColor(SSD1306_WHITE);
+      oled.setTextSize(1);
+      oled.setCursor(0, 0);  oled.print("[WiFi] Reconectando");
+      oled.setCursor(0, 14); oled.printf("Intento: %d", wifiRetries);
+      oled.setCursor(0, 28); oled.print("LDRs + servos OK");
+      oled.setCursor(0, 42); oled.printf("P: %.1f mW T:%.1fC", potencia_mW, temperatura);
+      oled.display();
+    }
+
+    WiFi.disconnect(false);
+    delay(200);
+    WiFi.begin(WIFI_SSID, WIFI_PASS);
+    unsigned long t0 = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - t0 < 8000) delay(200);
+
+    if (WiFi.status() == WL_CONNECTED) {
+      Serial.printf("[WiFi] Reconectado! IP: %s\n", WiFi.localIP().toString().c_str());
+      wifiRetries = 0;
+      tVercel  = now - 25000UL; // enviar pronto
+      tWeather = 0;
+      tIrr     = 0;
+      // Mostrar OK en OLED
+      if (oledOK) {
+        oled.clearDisplay();
+        oled.setTextColor(SSD1306_WHITE);
+        oled.setTextSize(1);
+        oled.setCursor(0, 0);  oled.print("[WiFi] Reconectado!");
+        oled.setCursor(0, 16); oled.print(WiFi.localIP().toString());
+        oled.display();
+        delay(1500);
+      }
+    } else if (wifiRetries >= 5) {
+      // Tras 5 intentos, modo AP
+      Serial.println("[WiFi] Maximo intentos, modo AP");
+      WiFi.mode(WIFI_AP);
+      WiFi.softAP(AP_SSID, AP_PASS);
+      wifiRetries = 0;
+      if (oledOK) {
+        oled.clearDisplay();
+        oled.setTextColor(SSD1306_WHITE);
+        oled.setTextSize(1);
+        oled.setCursor(0, 0);  oled.print("Modo AP activo");
+        oled.setCursor(0, 14); oled.print(AP_SSID);
+        oled.setCursor(0, 28); oled.print("Pass: solar1234");
+        oled.setCursor(0, 42); oled.print("IP: 192.168.4.1");
+        oled.display();
+      }
+    }
+  }
 
   if (now - tLDR >= T_LDR) {
     tLDR = now;
