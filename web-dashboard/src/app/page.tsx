@@ -17,6 +17,7 @@ export default function Dashboard() {
   const [history, setHistory] = useState<any[]>([]);
   const [days,    setDays]    = useState<any[]>([]);
   const [selDay,  setSelDay]  = useState('');
+  const [showDays, setShowDays] = useState(false);
   const [startDt, setStartDt] = useState('');
   const [endDt,   setEndDt]   = useState('');
   const [filtered, setFiltered] = useState(false);
@@ -79,6 +80,7 @@ export default function Dashboard() {
     setStartDt(s);
     setEndDt(e);
     setFiltered(true);
+    setShowDays(false);
     loadData(true, s, e);
   }
 
@@ -87,6 +89,7 @@ export default function Dashboard() {
     setStartDt('');
     setEndDt('');
     setFiltered(false);
+    setShowDays(false);
     loadData(false, '', '');
   }
 
@@ -271,73 +274,75 @@ export default function Dashboard() {
           <div className="bar" style={{marginTop:'12px'}}><div className="barfill" style={{width:`${Math.min(parseFloat(d.ghi||0)/1200*100,100)}%`}}></div></div>
         </div>
 
-        {/* ══ FILTRO DÍAS ─── SECCIÓN PROMINENTE ═════════════════════ */}
-        <div className="card wide" style={{border:'1px solid rgba(247,168,0,.4)',background:'rgba(247,168,0,.03)'}}>
-          <div className="ptitle" style={{marginBottom:'12px'}}>
-            <span style={{fontSize:'11px'}}>📅 FILTRAR HISTORIAL POR DÍA O RANGO</span>
-            <span style={{color:'var(--dim)',fontSize:'9px'}}>{days.length} días con datos · registros cada 2 min</span>
-          </div>
+        {/* ══ GRÁFICA + FILTROS (inline en header como versión anterior) ══════ */}
+        <div className="card wide">
+          <div className="ptitle" style={{flexWrap:'wrap',gap:'6px',alignItems:'center'}}>
+            {/* Título */}
+            <span style={{whiteSpace:'nowrap'}}>⬇ VOLTAJE · CORRIENTE · POTENCIA · IRRADIANCIA — BD</span>
 
-          {/* Chips de días */}
-          <div style={{display:'flex',flexWrap:'wrap',gap:'6px',marginBottom:'14px',alignItems:'center'}}>
-            <span style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--dim)',marginRight:'4px'}}>DÍA:</span>
-            <button
-              onClick={clearFilter}
-              style={{padding:'4px 12px',borderRadius:'3px',fontSize:'9px',fontFamily:'var(--mono)',letterSpacing:'.08em',cursor:'pointer',border:`1px solid ${!filtered?'var(--y)':'var(--border)'}`,background:!filtered?'var(--y)':'transparent',color:!filtered?'#000':'var(--dim)',fontWeight:!filtered?700:400}}
-            >
-              EN VIVO
-            </button>
-            {days.map((day:any) => (
+            {/* ── DIAS dropdown ── */}
+            <div style={{position:'relative',display:'inline-block'}}>
               <button
-                key={day.fecha}
-                onClick={() => pickDay(day.fecha)}
-                style={{padding:'4px 12px',borderRadius:'3px',fontSize:'9px',fontFamily:'var(--mono)',letterSpacing:'.08em',cursor:'pointer',
-                  border:`1px solid ${selDay===day.fecha?'var(--y)':'var(--border)'}`,
-                  background:selDay===day.fecha?'var(--y)':'transparent',
-                  color:selDay===day.fecha?'#000':'var(--tx)',
-                  fontWeight:selDay===day.fecha?700:400
-                }}
+                onClick={()=>setShowDays(v=>!v)}
+                style={{padding:'5px 12px',borderRadius:'3px',background:filtered?'var(--y)':'rgba(247,168,0,.1)',color:filtered?'#000':'var(--y)',border:'1px solid var(--y)',fontFamily:'var(--mono)',fontSize:'9px',fontWeight:700,cursor:'pointer',letterSpacing:'.08em',whiteSpace:'nowrap'}}
               >
-                {day.fecha} <span style={{opacity:.5}}>({day.registros})</span>
+                📅 {selDay ? selDay : 'DIAS'}
               </button>
-            ))}
-          </div>
+              {/* dropdown */}
+              {showDays && (
+                <div style={{position:'absolute',top:'100%',left:0,zIndex:200,background:'#0d1520',border:'1px solid var(--border)',borderRadius:'4px',minWidth:'200px',maxHeight:'220px',overflowY:'auto',marginTop:'3px',boxShadow:'0 6px 24px rgba(0,0,0,.7)'}}>
+                  <div
+                    onClick={()=>{ clearFilter(); }}
+                    style={{padding:'7px 14px',cursor:'pointer',fontFamily:'var(--mono)',fontSize:'10px',color:'var(--y)',borderBottom:'1px solid var(--border)',background:'rgba(247,168,0,.06)'}}
+                  >
+                    ▶ EN VIVO (últimos datos)
+                  </div>
+                  {days.map((day:any)=>(
+                    <div
+                      key={day.fecha}
+                      onClick={()=>pickDay(day.fecha)}
+                      style={{padding:'7px 14px',cursor:'pointer',fontFamily:'var(--mono)',fontSize:'10px',color:'var(--tx)',borderBottom:'1px solid rgba(26,40,64,.4)',display:'flex',justifyContent:'space-between',alignItems:'center'}}
+                      onMouseEnter={e=>(e.currentTarget.style.background='rgba(247,168,0,.07)')}
+                      onMouseLeave={e=>(e.currentTarget.style.background='transparent')}
+                    >
+                      <span>{day.fecha}</span>
+                      <span style={{color:'var(--dim)',fontSize:'9px'}}>{day.registros} reg</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
-          {/* Rango personalizado */}
-          <div style={{display:'flex',gap:'8px',alignItems:'center',flexWrap:'wrap'}}>
-            <span style={{fontFamily:'var(--mono)',fontSize:'9px',color:'var(--dim)'}}>RANGO:</span>
-            <input type="datetime-local" value={startDt} onChange={e=>setStartDt(e.target.value)}
-              style={{background:'var(--bg)',color:'#fff',border:'1px solid var(--border)',padding:'5px',fontSize:'10px',fontFamily:'var(--mono)',borderRadius:'4px'}}/>
-            <span style={{color:'var(--dim)'}}>→</span>
-            <input type="datetime-local" value={endDt} onChange={e=>setEndDt(e.target.value)}
-              style={{background:'var(--bg)',color:'#fff',border:'1px solid var(--border)',padding:'5px',fontSize:'10px',fontFamily:'var(--mono)',borderRadius:'4px'}}/>
-            <button onClick={applyRange}
-              style={{padding:'5px 14px',borderRadius:'4px',background:'var(--y)',color:'#000',border:'none',fontFamily:'var(--mono)',fontSize:'10px',fontWeight:700,cursor:'pointer',letterSpacing:'.08em'}}>
+            {/* Inputs de rango */}
+            <input
+              type="datetime-local"
+              value={startDt}
+              onChange={e=>setStartDt(e.target.value)}
+              style={{background:'var(--bg)',color:'#ddd',border:'1px solid var(--border)',padding:'4px 6px',fontSize:'9px',fontFamily:'var(--mono)',borderRadius:'3px',minWidth:'0',flex:'1',maxWidth:'180px'}}
+            />
+            <span style={{color:'var(--dim)',fontSize:'10px',flexShrink:0}}>A</span>
+            <input
+              type="datetime-local"
+              value={endDt}
+              onChange={e=>setEndDt(e.target.value)}
+              style={{background:'var(--bg)',color:'#ddd',border:'1px solid var(--border)',padding:'4px 6px',fontSize:'9px',fontFamily:'var(--mono)',borderRadius:'3px',minWidth:'0',flex:'1',maxWidth:'180px'}}
+            />
+            <button
+              onClick={applyRange}
+              style={{padding:'5px 12px',borderRadius:'3px',background:'var(--y)',color:'#000',border:'none',fontFamily:'var(--mono)',fontSize:'9px',fontWeight:700,cursor:'pointer',letterSpacing:'.08em',whiteSpace:'nowrap',flexShrink:0}}
+            >
               FILTRAR
             </button>
-            <button onClick={clearFilter}
-              style={{padding:'5px 14px',borderRadius:'4px',background:'transparent',color:'var(--r)',border:'1px solid var(--r)',fontFamily:'var(--mono)',fontSize:'10px',cursor:'pointer',letterSpacing:'.08em'}}>
-              ✕ LIMPIAR
+            <button
+              onClick={clearFilter}
+              style={{padding:'5px 12px',borderRadius:'3px',background:'transparent',color:'var(--tx)',border:'1px solid var(--border)',fontFamily:'var(--mono)',fontSize:'9px',cursor:'pointer',letterSpacing:'.08em',flexShrink:0}}
+            >
+              LIMPIAR
             </button>
-            {filtered && (
-              <span style={{color:'var(--y)',fontFamily:'var(--mono)',fontSize:'10px'}}>
-                ● {history.length} registros {selDay ? `(${selDay})` : 'en rango'}
-              </span>
-            )}
-
-            {/* DESCARGA CSV */}
-            <a href={csvUrl()} download
-              style={{marginLeft:'auto',padding:'5px 16px',borderRadius:'4px',border:'1px solid var(--c)',color:'var(--c)',fontFamily:'var(--mono)',fontSize:'10px',letterSpacing:'.08em',textDecoration:'none',background:'rgba(0,200,255,.07)',display:'inline-block'}}>
-              ↓ CSV {filtered && selDay ? `(${selDay})` : '(TODOS)'}
-            </a>
-          </div>
-        </div>
-
-        {/* ══ GRÁFICA ════════════════════════════════════════════════ */}
-        <div className="card wide">
-          <div className="ptitle">
-            <span>⬇ VOLTAJE · CORRIENTE · POTENCIA · GHI — HISTÓRICO</span>
-            <span style={{color:'var(--dim)',fontSize:'9px'}}>{history.length} pts · {filtered?(selDay||'rango'):'live'}</span>
+            {/* Contador */}
+            <span style={{color:'var(--dim)',fontSize:'9px',whiteSpace:'nowrap',marginLeft:'4px'}}>
+              {history.length} PTS{selDay?` · ${selDay}`:filtered?' · rango':''}
+            </span>
           </div>
           <canvas ref={chartRef} height={200}></canvas>
         </div>
