@@ -41,11 +41,12 @@ export default function Dashboard() {
       });
 
       const powData = history.map(h => parseFloat(h.p) || 0);
+      const pfData  = history.map(h => parseFloat(h.pf) || 0);
       const ghiData = history.map(h => parseFloat(h.ghi) || 0);
       const vData   = history.map(h => parseFloat(h.v) || 0);
       const iData   = history.map(h => parseFloat(h.i) || 0);
 
-      const pMax = Math.max(...powData, 100) * 1.3;
+      const pMax = Math.max(...powData, ...pfData, 100) * 1.3;
       const gMax = Math.max(...ghiData, 200) * 1.3;
 
       const ctx = chartRef.current.getContext('2d');
@@ -57,13 +58,25 @@ export default function Dashboard() {
           labels,
           datasets: [
             {
-              label: 'Potencia (mW)',
+              label: 'Móvil (mW)',
               data: powData,
               borderColor: '#00e676',
               backgroundColor: 'rgba(0,230,118,0.15)',
               borderWidth: 2,
               pointRadius: 0,
               fill: true,
+              tension: 0.35,
+              yAxisID: 'yP',
+              order: 1,
+            },
+            {
+              label: 'Fijo sim (mW)',
+              data: pfData,
+              borderColor: '#00c8ff',
+              backgroundColor: 'transparent',
+              borderWidth: 2,
+              pointRadius: 0,
+              fill: false,
               tension: 0.35,
               yAxisID: 'yP',
               order: 1,
@@ -197,11 +210,32 @@ export default function Dashboard() {
     v: 0, i: 0, p: 0, t: 0,
     ah: 90, av: 90, st: 0, ec: 0,
     mp: 0, pp: 0, ef: 0,
-    ghi: 0, dni: 0, irrh: '--', cielo: '---'
+    ghi: 0, dni: 0, irrh: '--', cielo: '---',
+    pf: 0, poaf: 0, gan: 0, emv: 0, efj: 0,
+    els: 0, azs: 0, eta: 0, tlt: 25,
   };
 
-  const d = data || fallback;
+  const raw = data || fallback;
+  // Coerción defensiva: PostgreSQL devuelve REAL/NUMERIC como string en algunos drivers
+  const num = (x: any, def = 0) => {
+    const n = typeof x === 'number' ? x : parseFloat(x);
+    return isNaN(n) ? def : n;
+  };
+  const d = {
+    v: num(raw.v), i: num(raw.i), p: num(raw.p), t: num(raw.t),
+    ah: num(raw.ah, 90), av: num(raw.av, 90),
+    st: num(raw.st), ec: num(raw.ec),
+    mp: num(raw.mp), pp: num(raw.pp), ef: num(raw.ef),
+    ghi: num(raw.ghi), dni: num(raw.dni),
+    irrh: raw.irrh ?? '--', cielo: raw.cielo ?? '---',
+    pf: num(raw.pf), poaf: num(raw.poaf), gan: num(raw.gan),
+    emv: num(raw.emv), efj: num(raw.efj),
+    els: num(raw.els), azs: num(raw.azs),
+    eta: num(raw.eta), tlt: num(raw.tlt, 25),
+  };
   const badgeCls = d.st === 0 ? '' : d.st === 3 ? 's' : 'e';
+  const ganE = d.efj > 0.0001 ? ((d.emv - d.efj) / d.efj * 100) : 0;
+  const ganColor = d.gan >= 0 ? '#00e676' : '#ff4560';
 
   return (
     <>
@@ -243,6 +277,32 @@ export default function Dashboard() {
           <div className="cval">{d.t.toFixed(1)}<span className="cunit">&deg;C</span></div>
           <div className="csub">Open-Meteo &middot; Vercel</div>
           <div className="bar"><div className="barfill" style={{ width: `${Math.min(d.t / 80 * 100, 100)}%` }}></div></div>
+        </div>
+
+        {/* ROW COMPARACIÓN: Seguidor vs Panel Fijo simulado (β=25°, sur) */}
+        <div className="card">
+          <div className="clabel"><span>Panel fijo (sim)</span><span>&#9648;</span></div>
+          <div className="cval">{d.pf.toFixed(2)}<span className="cunit">mW</span></div>
+          <div className="csub">Tilt {d.tlt.toFixed(0)}&deg; &middot; sur &middot; POA: {d.poaf.toFixed(0)} W/m&sup2;</div>
+          <div className="bar"><div className="barfill" style={{ width: `${Math.min(d.pf / 300 * 100, 100)}%` }}></div></div>
+        </div>
+        <div className="card g">
+          <div className="clabel"><span>Ganancia seguidor</span><span>&#9650;</span></div>
+          <div className="cval" style={{ color: ganColor }}>{d.gan.toFixed(1)}<span className="cunit">%</span></div>
+          <div className="csub">vs panel estático equivalente</div>
+          <div className="bar"><div className="barfill" style={{ width: `${Math.min(Math.max(d.gan, 0) / 100 * 100, 100)}%` }}></div></div>
+        </div>
+        <div className="card b">
+          <div className="clabel"><span>Energía acumulada</span><span>&#10070;</span></div>
+          <div className="cval">{d.emv.toFixed(3)}<span className="cunit">Wh</span></div>
+          <div className="csub">Fijo: {d.efj.toFixed(3)} Wh &middot; &Delta;: {ganE.toFixed(1)}%</div>
+          <div className="bar"><div className="barfill" style={{ width: `${Math.min(d.emv / 1.0 * 100, 100)}%` }}></div></div>
+        </div>
+        <div className="card r">
+          <div className="clabel"><span>Posición solar</span><span>&#9728;</span></div>
+          <div className="cval">{d.els.toFixed(1)}<span className="cunit">&deg;</span></div>
+          <div className="csub">Azimut: {d.azs.toFixed(1)}&deg; &middot; &eta;: {(d.eta * 100).toFixed(1)}%</div>
+          <div className="bar"><div className="barfill" style={{ width: `${Math.min(Math.max(d.els, 0) / 90 * 100, 100)}%` }}></div></div>
         </div>
 
         {/* ROW 2: IRRADIANCE + CHART */}
@@ -341,24 +401,30 @@ export default function Dashboard() {
               <thead>
                 <tr>
                   <th>ID</th><th>HORA</th><th>V (V)</th><th>I (mA)</th>
-                  <th>P (mW)</th><th>T (&deg;C)</th><th>GHI (W/m&sup2;)</th>
+                  <th>P_M (mW)</th><th style={{ color: '#00c8ff' }}>P_F (mW)</th><th>GAN %</th>
+                  <th>T (&deg;C)</th><th>GHI (W/m&sup2;)</th>
                   <th>AH&deg;</th><th>AV&deg;</th><th>ESTADO</th>
                 </tr>
               </thead>
               <tbody>
-                {!data && <tr><td colSpan={10} style={{ textAlign: 'center', color: 'var(--dim)', padding: '20px' }}>Esperando a Vercel/Postgres...</td></tr>}
+                {!data && <tr><td colSpan={12} style={{ textAlign: 'center', color: 'var(--dim)', padding: '20px' }}>Esperando a Vercel/Postgres...</td></tr>}
                 {[...history].reverse().map((row: any) => {
                   const d = new Date(row.created_at);
                   const hora = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}:${d.getSeconds().toString().padStart(2, '0')}`;
+                  const pf  = num(row.pf);
+                  const gan = num(row.gan);
+                  const ganColor = gan >= 0 ? '#00e676' : '#ff4560';
                   return (
                     <tr key={row.id}>
                       <td>{row.id}</td>
                       <td>{hora}</td>
-                      <td>{row.v.toFixed(3)}</td>
-                      <td>{row.i.toFixed(2)}</td>
-                      <td>{row.p.toFixed(2)}</td>
-                      <td>{row.t.toFixed(1)}</td>
-                      <td>{row.ghi.toFixed(0)}</td>
+                      <td>{num(row.v).toFixed(3)}</td>
+                      <td>{num(row.i).toFixed(2)}</td>
+                      <td>{num(row.p).toFixed(2)}</td>
+                      <td style={{ color: '#00c8ff' }}>{pf.toFixed(2)}</td>
+                      <td style={{ color: ganColor }}>{gan.toFixed(1)}</td>
+                      <td>{num(row.t).toFixed(1)}</td>
+                      <td>{num(row.ghi).toFixed(0)}</td>
                       <td>{row.ah}</td>
                       <td>{row.av}</td>
                       <td><span className={`tag ${ECLS[row.st]}`}>{ESTADOS[row.st]}</span></td>
