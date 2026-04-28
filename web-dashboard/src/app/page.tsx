@@ -23,6 +23,7 @@ export default function Dashboard() {
   const [filtered, setFiltered] = useState(false);
   const [rec,     setRec]     = useState(true);
   const [toggling, setToggling] = useState(false);
+  const [tableView, setTableView] = useState<'movil' | 'fijo'>('movil');
   const chartRef = useRef<HTMLCanvasElement>(null);
   const gaugeRef = useRef<HTMLCanvasElement>(null);
   const chartInst = useRef<any>(null);
@@ -144,6 +145,21 @@ export default function Dashboard() {
     const ghi  = history.map(h => parseFloat(h.ghi) || 0);
     const volt = history.map(h => parseFloat(h.v)   || 0);
     const curr = history.map(h => parseFloat(h.i)   || 0);
+    // V_fijo / I_fijo derivados: misma celda → V cae ligeramente con menos POA,
+    // I escala con la potencia. Modelo: V_f = V_m * (0.9 + 0.1*pf/p), I_f = pf/V_f.
+    const vfij = history.map(h => {
+      const v  = parseFloat(h.v)  || 0;
+      const p  = parseFloat(h.p)  || 0;
+      const pf = parseFloat(h.pf) || 0;
+      if (v <= 0 || p <= 0.01) return 0;
+      const ratio = Math.max(0, Math.min(1, pf / p));
+      return v * (0.9 + 0.1 * ratio);
+    });
+    const ifij = history.map((h, idx) => {
+      const pf = parseFloat(h.pf) || 0;
+      const vf = vfij[idx];
+      return vf > 0.01 ? pf / vf : 0;
+    });
 
     chartInst.current = new Chart(ctx, {
       type: 'line',
@@ -151,8 +167,10 @@ export default function Dashboard() {
         { label:'Móvil (mW)',    data:pow,  borderColor:'#00e676', backgroundColor:'rgba(0,230,118,0.15)', borderWidth:2,   pointRadius:0, fill:true,  tension:0.35, yAxisID:'yP' },
         { label:'Fijo sim (mW)', data:pfij, borderColor:'#00c8ff', backgroundColor:'transparent',          borderWidth:2,   pointRadius:0, fill:false, tension:0.35, yAxisID:'yP' },
         { label:'GHI (W/m²)',    data:ghi,  borderColor:'#f7a800', backgroundColor:'rgba(247,168,0,0.10)', borderWidth:1.8, pointRadius:0, fill:true,  tension:0.35, yAxisID:'yG' },
-        { label:'Voltaje (V)',   data:volt, borderColor:'#7df0ff', backgroundColor:'transparent',          borderWidth:1.2, pointRadius:0, fill:false, tension:0.3,  yAxisID:'yV', borderDash:[6,3] },
-        { label:'Corriente (mA)',data:curr, borderColor:'#80dfff', backgroundColor:'transparent',          borderWidth:1.5, pointRadius:0, fill:false, tension:0.3,  yAxisID:'yI', borderDash:[2,2] },
+        { label:'V Móvil (V)',   data:volt, borderColor:'#7df0ff', backgroundColor:'transparent',          borderWidth:1.2, pointRadius:0, fill:false, tension:0.3,  yAxisID:'yV', borderDash:[6,3] },
+        { label:'V Fijo (V)',    data:vfij, borderColor:'#ff70b3', backgroundColor:'transparent',          borderWidth:1.2, pointRadius:0, fill:false, tension:0.3,  yAxisID:'yV', borderDash:[6,3] },
+        { label:'I Móvil (mA)',  data:curr, borderColor:'#80dfff', backgroundColor:'transparent',          borderWidth:1.5, pointRadius:0, fill:false, tension:0.3,  yAxisID:'yI', borderDash:[2,2] },
+        { label:'I Fijo (mA)',   data:ifij, borderColor:'#ffa5b8', backgroundColor:'transparent',          borderWidth:1.5, pointRadius:0, fill:false, tension:0.3,  yAxisID:'yI', borderDash:[2,2] },
       ]},
       options: {
         animation:false, responsive:true,
@@ -444,16 +462,45 @@ export default function Dashboard() {
         <div className="card wide">
           {/* ─── Header con filtros completos ─────────────────────── */}
           <div style={{marginBottom:'10px'}}>
-            {/* Fila 1: título + CSV */}
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'10px'}}>
+            {/* Fila 1: título + toggle vista + CSV */}
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'10px',gap:'12px',flexWrap:'wrap'}}>
               <span style={{fontFamily:'var(--mono)',fontSize:'10px',color:'var(--y)',letterSpacing:'.1em',textTransform:'uppercase'}}>
                 ⊞ REGISTRO DE DATOS BACKEND
                 {filtered && selDay && <span style={{color:'var(--tx)',marginLeft:'8px',fontWeight:400}}>— {selDay}</span>}
               </span>
-              <a href={csvUrl()} download
-                style={{padding:'5px 16px',borderRadius:'4px',border:'1px solid var(--c)',color:'var(--c)',fontFamily:'var(--mono)',fontSize:'10px',letterSpacing:'.08em',textDecoration:'none',background:'rgba(0,200,255,.07)',flexShrink:0}}>
-                ↓ CSV {filtered && selDay ? `(${selDay})` : '(TODOS)'}
-              </a>
+              <div style={{display:'flex',alignItems:'center',gap:'8px',flexShrink:0}}>
+                {/* Toggle vista MÓVIL ↔ FIJO */}
+                <div style={{display:'inline-flex',border:'1px solid var(--border)',borderRadius:'4px',overflow:'hidden'}}>
+                  <button
+                    onClick={()=>setTableView('movil')}
+                    style={{
+                      padding:'5px 14px',background: tableView==='movil' ? 'rgba(0,230,118,.18)' : 'transparent',
+                      color: tableView==='movil' ? 'var(--g)' : 'var(--dim)',
+                      border:'none',borderRight:'1px solid var(--border)',
+                      fontFamily:'var(--mono)',fontSize:'10px',fontWeight:tableView==='movil'?700:400,
+                      letterSpacing:'.08em',cursor:'pointer',whiteSpace:'nowrap',
+                    }}
+                  >
+                    ● MÓVIL
+                  </button>
+                  <button
+                    onClick={()=>setTableView('fijo')}
+                    style={{
+                      padding:'5px 14px',background: tableView==='fijo' ? 'rgba(0,200,255,.18)' : 'transparent',
+                      color: tableView==='fijo' ? 'var(--c)' : 'var(--dim)',
+                      border:'none',
+                      fontFamily:'var(--mono)',fontSize:'10px',fontWeight:tableView==='fijo'?700:400,
+                      letterSpacing:'.08em',cursor:'pointer',whiteSpace:'nowrap',
+                    }}
+                  >
+                    ▭ FIJO
+                  </button>
+                </div>
+                <a href={csvUrl()} download
+                  style={{padding:'5px 16px',borderRadius:'4px',border:'1px solid var(--c)',color:'var(--c)',fontFamily:'var(--mono)',fontSize:'10px',letterSpacing:'.08em',textDecoration:'none',background:'rgba(0,200,255,.07)',flexShrink:0}}>
+                  ↓ CSV {filtered && selDay ? `(${selDay})` : '(TODOS)'}
+                </a>
+              </div>
             </div>
             {/* Fila 2: controles de filtro */}
             <div style={{display:'flex',gap:'6px',alignItems:'center',flexWrap:'wrap',padding:'8px 10px',background:'rgba(247,168,0,.04)',border:'1px solid rgba(247,168,0,.2)',borderRadius:'4px'}}>
@@ -515,8 +562,22 @@ export default function Dashboard() {
               <thead>
                 <tr>
                   <th>ID</th><th>FECHA</th><th>HORA</th>
-                  <th>V (V)</th><th>I (mA)</th>
-                  <th>P_M (mW)</th><th style={{color:'#00c8ff'}}>P_F (mW)</th><th>GAN %</th>
+                  {tableView === 'movil' ? (
+                    <>
+                      <th style={{color:'var(--g)'}}>V (V)</th>
+                      <th style={{color:'var(--g)'}}>I (mA)</th>
+                      <th style={{color:'var(--g)'}}>P (mW)</th>
+                      <th style={{color:'#00c8ff'}}>P_F (mW)</th>
+                    </>
+                  ) : (
+                    <>
+                      <th style={{color:'#00c8ff'}}>V_F (V)</th>
+                      <th style={{color:'#00c8ff'}}>I_F (mA)</th>
+                      <th style={{color:'#00c8ff'}}>P_F (mW)</th>
+                      <th style={{color:'var(--g)'}}>P_M (mW)</th>
+                    </>
+                  )}
+                  <th>GAN %</th>
                   <th>T (°C)</th><th>GHI (W/m²)</th>
                   <th>AH°</th><th>AV°</th><th>ESTADO</th>
                 </tr>
@@ -532,18 +593,36 @@ export default function Dashboard() {
                   const fec = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
                   const hor = `${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}:${String(dt.getSeconds()).padStart(2,'0')}`;
                   const gv  = parseFloat(row.ghi)||0;
+                  const vm  = parseFloat(row.v) || 0;
+                  const im  = parseFloat(row.i) || 0;
+                  const pm  = parseFloat(row.p) || 0;
                   const pfv = parseFloat(row.pf)||0;
                   const gnv = parseFloat(row.gan)||0;
                   const gnc = gnv >= 0 ? 'var(--g)' : 'var(--r)';
+                  // Derivar V_F / I_F del fijo: misma celda, V baja un poco con menos POA
+                  const ratio = pm > 0.01 ? Math.max(0, Math.min(1, pfv / pm)) : 0;
+                  const vf = vm > 0 ? vm * (0.9 + 0.1 * ratio) : 0;
+                  const ifv = vf > 0.01 ? pfv / vf : 0;
                   return (
                     <tr key={row.id}>
                       <td style={{color:'var(--dim)'}}>{row.id}</td>
                       <td style={{fontSize:'9px',color:'var(--dim)'}}>{fec}</td>
                       <td>{hor}</td>
-                      <td>{parseFloat(row.v).toFixed(3)}</td>
-                      <td>{parseFloat(row.i).toFixed(2)}</td>
-                      <td>{parseFloat(row.p).toFixed(2)}</td>
-                      <td style={{color:'#00c8ff'}}>{pfv.toFixed(2)}</td>
+                      {tableView === 'movil' ? (
+                        <>
+                          <td style={{color:'var(--g)'}}>{vm.toFixed(3)}</td>
+                          <td style={{color:'var(--g)'}}>{im.toFixed(2)}</td>
+                          <td style={{color:'var(--g)'}}>{pm.toFixed(2)}</td>
+                          <td style={{color:'#00c8ff'}}>{pfv.toFixed(2)}</td>
+                        </>
+                      ) : (
+                        <>
+                          <td style={{color:'#00c8ff'}}>{vf.toFixed(3)}</td>
+                          <td style={{color:'#00c8ff'}}>{ifv.toFixed(2)}</td>
+                          <td style={{color:'#00c8ff'}}>{pfv.toFixed(2)}</td>
+                          <td style={{color:'var(--g)'}}>{pm.toFixed(2)}</td>
+                        </>
+                      )}
                       <td style={{color:gnc}}>{gnv.toFixed(1)}</td>
                       <td>{parseFloat(row.t).toFixed(1)}</td>
                       <td style={{color:gv>100?'var(--y)':'var(--dim)'}}>{gv.toFixed(0)}</td>
