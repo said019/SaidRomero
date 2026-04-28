@@ -30,8 +30,9 @@ export async function GET() {
     `;
     await pool.query(createTableQuery);
 
+    // Migración aditiva LDR (preservada de versión previa)
     const alterTableQuery = `
-      ALTER TABLE log_data 
+      ALTER TABLE log_data
       ADD COLUMN IF NOT EXISTS ltl INTEGER DEFAULT 0,
       ADD COLUMN IF NOT EXISTS ltr INTEGER DEFAULT 0,
       ADD COLUMN IF NOT EXISTS lbl INTEGER DEFAULT 0,
@@ -39,7 +40,26 @@ export async function GET() {
     `;
     await pool.query(alterTableQuery);
 
-    return NextResponse.json({ success: true, message: "Table 'log_data' created successfully." });
+    // Migración aditiva: comparación con panel fijo simulado (β=25°, sur).
+    // ADD COLUMN IF NOT EXISTS es idempotente — seguro de re-ejecutar.
+    const alterPanelFijo = `
+      ALTER TABLE log_data
+      ADD COLUMN IF NOT EXISTS pf   REAL,
+      ADD COLUMN IF NOT EXISTS poaf REAL,
+      ADD COLUMN IF NOT EXISTS gan  REAL,
+      ADD COLUMN IF NOT EXISTS emv  REAL,
+      ADD COLUMN IF NOT EXISTS efj  REAL,
+      ADD COLUMN IF NOT EXISTS els  REAL,
+      ADD COLUMN IF NOT EXISTS azs  REAL,
+      ADD COLUMN IF NOT EXISTS eta  REAL,
+      ADD COLUMN IF NOT EXISTS tlt  REAL;
+    `;
+    await pool.query(alterPanelFijo);
+
+    return NextResponse.json({
+      success: true,
+      message: "Tabla 'log_data' lista (LDR + comparación panel fijo)."
+    });
   } catch (err: any) {
     console.error("Database Error:", err);
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });

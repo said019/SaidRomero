@@ -11,11 +11,11 @@ export async function GET(request: Request) {
 
     let historyQuery = `SELECT * FROM log_data ORDER BY id ASC`;
     const queryParams: any[] = [];
-    
+
     if (start && end) {
       historyQuery = `
-        SELECT * FROM log_data 
-        WHERE created_at >= $1 AND created_at <= $2 
+        SELECT * FROM log_data
+        WHERE created_at >= $1 AND created_at <= $2
         ORDER BY id ASC
       `;
       queryParams.push(start, end);
@@ -28,9 +28,19 @@ export async function GET(request: Request) {
       return new NextResponse('No hay datos aún', { status: 404 });
     }
 
-    // Build CSV header
-    const headers = ['id','fecha_hora','v','i','p','t','ah','av','st','ec','mp','pp','ef','ghi','dni','irrh','cielo'];
+    const headers = [
+      'id','fecha_hora',
+      'v','i','p','t','ah','av','st','ec','mp','pp','ef',
+      'ghi','dni','irrh','cielo',
+      'ltl','ltr','lbl','lbr',
+      'pf_mW','poaf_W_m2','gan_pct',
+      'emv_Wh','efj_Wh',
+      'els_deg','azs_deg','eta_celda','tilt_fijo_deg'
+    ];
     const lines = [headers.join(',')];
+
+    const fmt = (v: any, d: number) =>
+      v === null || v === undefined ? '' : Number(v).toFixed(d);
 
     for (const row of rows) {
       const fecha = new Date(row.created_at).toLocaleString('es-MX', { timeZone: 'America/Mexico_City' });
@@ -51,12 +61,25 @@ export async function GET(request: Request) {
         row.ghi?.toFixed(1),
         row.dni?.toFixed(1),
         row.irrh,
-        row.cielo
+        row.cielo,
+        row.ltl ?? '',
+        row.ltr ?? '',
+        row.lbl ?? '',
+        row.lbr ?? '',
+        fmt(row.pf, 3),
+        fmt(row.poaf, 1),
+        fmt(row.gan, 1),
+        fmt(row.emv, 4),
+        fmt(row.efj, 4),
+        fmt(row.els, 1),
+        fmt(row.azs, 1),
+        fmt(row.eta, 4),
+        fmt(row.tlt, 1),
       ].join(','));
     }
 
     const csv = lines.join('\n');
-    
+
     return new NextResponse(csv, {
       status: 200,
       headers: {

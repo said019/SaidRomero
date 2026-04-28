@@ -140,6 +140,7 @@ export default function Dashboard() {
 
     const lbl  = history.map(h => { const d = new Date(h.created_at); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; });
     const pow  = history.map(h => parseFloat(h.p)   || 0);
+    const pfij = history.map(h => parseFloat(h.pf)  || 0);
     const ghi  = history.map(h => parseFloat(h.ghi) || 0);
     const volt = history.map(h => parseFloat(h.v)   || 0);
     const curr = history.map(h => parseFloat(h.i)   || 0);
@@ -147,10 +148,11 @@ export default function Dashboard() {
     chartInst.current = new Chart(ctx, {
       type: 'line',
       data: { labels: lbl, datasets: [
-        { label:'Potencia (mW)', data:pow,  borderColor:'#00e676', backgroundColor:'rgba(0,230,118,0.15)', borderWidth:2,   pointRadius:0, fill:true,  tension:0.35, yAxisID:'yP' },
+        { label:'Móvil (mW)',    data:pow,  borderColor:'#00e676', backgroundColor:'rgba(0,230,118,0.15)', borderWidth:2,   pointRadius:0, fill:true,  tension:0.35, yAxisID:'yP' },
+        { label:'Fijo sim (mW)', data:pfij, borderColor:'#00c8ff', backgroundColor:'transparent',          borderWidth:2,   pointRadius:0, fill:false, tension:0.35, yAxisID:'yP' },
         { label:'GHI (W/m²)',    data:ghi,  borderColor:'#f7a800', backgroundColor:'rgba(247,168,0,0.10)', borderWidth:1.8, pointRadius:0, fill:true,  tension:0.35, yAxisID:'yG' },
-        { label:'Voltaje (V)',   data:volt, borderColor:'#00c8ff', backgroundColor:'transparent',          borderWidth:1.5, pointRadius:0, fill:false, tension:0.3,  yAxisID:'yV', borderDash:[6,3] },
-        { label:'Corriente (mA)',data:curr, borderColor:'#80dfff', backgroundColor:'transparent',          borderWidth:1.8, pointRadius:0, fill:false, tension:0.3,  yAxisID:'yI' },
+        { label:'Voltaje (V)',   data:volt, borderColor:'#7df0ff', backgroundColor:'transparent',          borderWidth:1.2, pointRadius:0, fill:false, tension:0.3,  yAxisID:'yV', borderDash:[6,3] },
+        { label:'Corriente (mA)',data:curr, borderColor:'#80dfff', backgroundColor:'transparent',          borderWidth:1.5, pointRadius:0, fill:false, tension:0.3,  yAxisID:'yI', borderDash:[2,2] },
       ]},
       options: {
         animation:false, responsive:true,
@@ -184,7 +186,20 @@ export default function Dashboard() {
     ctx.beginPath(); ctx.arc(cx,cy,r,Math.PI,a); ctx.strokeStyle=g; ctx.lineWidth=12; ctx.stroke();
   }, [latest]);
 
-  const d = latest || { v:0,i:0,p:0,t:0,ah:90,av:90,st:0,ec:0,mp:0,pp:0,ef:0,ghi:0,dni:0,irrh:'--',cielo:'---',ltl:0,ltr:0,lbl:0,lbr:0 };
+  const d = latest || { v:0,i:0,p:0,t:0,ah:90,av:90,st:0,ec:0,mp:0,pp:0,ef:0,ghi:0,dni:0,irrh:'--',cielo:'---',ltl:0,ltr:0,lbl:0,lbr:0, pf:0,poaf:0,gan:0,emv:0,efj:0,els:0,azs:0,eta:0,tlt:25 };
+
+  // Comparación seguidor vs panel fijo simulado (β=25°, sur)
+  const pfijo  = parseFloat(d.pf)   || 0;
+  const poafij = parseFloat(d.poaf) || 0;
+  const gan    = parseFloat(d.gan)  || 0;
+  const emv    = parseFloat(d.emv)  || 0;
+  const efj    = parseFloat(d.efj)  || 0;
+  const els    = parseFloat(d.els)  || 0;
+  const azs    = parseFloat(d.azs)  || 0;
+  const eta    = parseFloat(d.eta)  || 0;
+  const tlt    = parseFloat(d.tlt)  || 25;
+  const ganE   = efj > 0.0001 ? ((emv - efj) / efj * 100) : 0;
+  const ganColor = gan >= 0 ? 'var(--g)' : 'var(--r)';
 
   return (
     <>
@@ -261,6 +276,32 @@ export default function Dashboard() {
               </div>
             ))}
           </div>
+        </div>
+
+        {/* ══ COMPARACIÓN: Seguidor vs Panel Fijo simulado (β=25°, sur) ══ */}
+        <div className="card">
+          <div className="clabel"><span>Panel fijo (sim)</span><span>▭</span></div>
+          <div className="cval">{pfijo.toFixed(2)}<span className="cunit">mW</span></div>
+          <div className="csub">Tilt {tlt.toFixed(0)}° · sur · POA: {poafij.toFixed(0)} W/m²</div>
+          <div className="bar"><div className="barfill" style={{width:`${Math.min(pfijo/300*100,100)}%`}}></div></div>
+        </div>
+        <div className="card g">
+          <div className="clabel"><span>Ganancia seguidor</span><span>▲</span></div>
+          <div className="cval" style={{color:ganColor}}>{gan.toFixed(1)}<span className="cunit">%</span></div>
+          <div className="csub">vs panel estático equivalente</div>
+          <div className="bar"><div className="barfill" style={{width:`${Math.min(Math.max(gan,0),100)}%`}}></div></div>
+        </div>
+        <div className="card b">
+          <div className="clabel"><span>Energía acumulada</span><span>❖</span></div>
+          <div className="cval">{emv.toFixed(3)}<span className="cunit">Wh</span></div>
+          <div className="csub">Fijo: {efj.toFixed(3)} Wh · Δ: {ganE.toFixed(1)}%</div>
+          <div className="bar"><div className="barfill" style={{width:`${Math.min(emv*100,100)}%`}}></div></div>
+        </div>
+        <div className="card r">
+          <div className="clabel"><span>Posición solar</span><span>☀</span></div>
+          <div className="cval">{els.toFixed(1)}<span className="cunit">°</span></div>
+          <div className="csub">Azimut: {azs.toFixed(1)}° · η: {(eta*100).toFixed(1)}%</div>
+          <div className="bar"><div className="barfill" style={{width:`${Math.min(Math.max(els,0)/90*100,100)}%`}}></div></div>
         </div>
 
         {/* ══ IRRADIANCIA ════════════════════════════════════════════ */}
@@ -474,14 +515,15 @@ export default function Dashboard() {
               <thead>
                 <tr>
                   <th>ID</th><th>FECHA</th><th>HORA</th>
-                  <th>V (V)</th><th>I (mA)</th><th>P (mW)</th>
+                  <th>V (V)</th><th>I (mA)</th>
+                  <th>P_M (mW)</th><th style={{color:'#00c8ff'}}>P_F (mW)</th><th>GAN %</th>
                   <th>T (°C)</th><th>GHI (W/m²)</th>
                   <th>AH°</th><th>AV°</th><th>ESTADO</th>
                 </tr>
               </thead>
               <tbody>
                 {history.length === 0 && (
-                  <tr><td colSpan={11} style={{textAlign:'center',color:'var(--dim)',padding:'28px',fontFamily:'var(--mono)',fontSize:'11px'}}>
+                  <tr><td colSpan={13} style={{textAlign:'center',color:'var(--dim)',padding:'28px',fontFamily:'var(--mono)',fontSize:'11px'}}>
                     {filtered ? '📭 Sin datos para el rango seleccionado' : '⏳ Esperando datos del ESP32 (cada 2 min)...'}
                   </td></tr>
                 )}
@@ -490,6 +532,9 @@ export default function Dashboard() {
                   const fec = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
                   const hor = `${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}:${String(dt.getSeconds()).padStart(2,'0')}`;
                   const gv  = parseFloat(row.ghi)||0;
+                  const pfv = parseFloat(row.pf)||0;
+                  const gnv = parseFloat(row.gan)||0;
+                  const gnc = gnv >= 0 ? 'var(--g)' : 'var(--r)';
                   return (
                     <tr key={row.id}>
                       <td style={{color:'var(--dim)'}}>{row.id}</td>
@@ -498,6 +543,8 @@ export default function Dashboard() {
                       <td>{parseFloat(row.v).toFixed(3)}</td>
                       <td>{parseFloat(row.i).toFixed(2)}</td>
                       <td>{parseFloat(row.p).toFixed(2)}</td>
+                      <td style={{color:'#00c8ff'}}>{pfv.toFixed(2)}</td>
+                      <td style={{color:gnc}}>{gnv.toFixed(1)}</td>
                       <td>{parseFloat(row.t).toFixed(1)}</td>
                       <td style={{color:gv>100?'var(--y)':'var(--dim)'}}>{gv.toFixed(0)}</td>
                       <td>{row.ah}</td>
