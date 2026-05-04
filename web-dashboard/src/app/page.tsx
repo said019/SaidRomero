@@ -268,15 +268,29 @@ export default function Dashboard() {
         <div className="card">
           <div className="clabel"><span>Voltaje</span><span>⚡</span></div>
           <div className="cval">{vm_latest.toFixed(3)}<span className="cunit">V</span></div>
-          <div className="csub">INA219 · Bus + Shunt</div>
+          <div className="csub" style={{color:'var(--dim)'}}>● MÓVIL · INA219</div>
           <div className="bar"><div className="barfill" style={{width:`${Math.min(vm_latest/10*100,100)}%`}}></div></div>
+          <div style={{marginTop:'10px',paddingTop:'10px',borderTop:'1px solid rgba(0,200,255,0.18)'}}>
+            <div style={{fontFamily:'var(--mono)',fontSize:'22px',fontWeight:700,color:'#00c8ff',letterSpacing:'.02em'}}>
+              {vf_latest.toFixed(3)}<span style={{fontSize:'11px',marginLeft:'3px',fontWeight:400}}>V</span>
+            </div>
+            <div style={{fontFamily:'var(--mono)',fontSize:'9px',color:'#00c8ff',opacity:.6,marginTop:'2px'}}>▭ FIJO (sim)</div>
+            <div className="bar" style={{marginTop:'6px'}}><div className="barfill" style={{width:`${Math.min(vf_latest/10*100,100)}%`,background:'#00c8ff'}}></div></div>
+          </div>
         </div>
 
         <div className="card b">
           <div className="clabel"><span>Corriente</span><span>～</span></div>
           <div className="cval">{im_latest.toFixed(2)}<span className="cunit">mA</span></div>
-          <div className="csub">INA219 · Alta precisión</div>
+          <div className="csub" style={{color:'var(--dim)'}}>● MÓVIL · INA219</div>
           <div className="bar"><div className="barfill" style={{width:`${Math.min(im_latest/500*100,100)}%`}}></div></div>
+          <div style={{marginTop:'10px',paddingTop:'10px',borderTop:'1px solid rgba(0,200,255,0.18)'}}>
+            <div style={{fontFamily:'var(--mono)',fontSize:'22px',fontWeight:700,color:'#00c8ff',letterSpacing:'.02em'}}>
+              {if_latest.toFixed(2)}<span style={{fontSize:'11px',marginLeft:'3px',fontWeight:400}}>mA</span>
+            </div>
+            <div style={{fontFamily:'var(--mono)',fontSize:'9px',color:'#00c8ff',opacity:.6,marginTop:'2px'}}>▭ FIJO (sim)</div>
+            <div className="bar" style={{marginTop:'6px'}}><div className="barfill" style={{width:`${Math.min(if_latest/500*100,100)}%`,background:'#00c8ff'}}></div></div>
+          </div>
         </div>
 
         <div className="card g">
