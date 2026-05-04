@@ -219,6 +219,14 @@ export default function Dashboard() {
   const ganE   = efj > 0.0001 ? ((emv - efj) / efj * 100) : 0;
   const ganColor = gan >= 0 ? 'var(--g)' : 'var(--r)';
 
+  // V_fijo / I_fijo del latest (mismo modelo que en la gráfica)
+  const vm_latest = parseFloat(d.v) || 0;
+  const pm_latest = parseFloat(d.p) || 0;
+  const im_latest = parseFloat(d.i) || 0;
+  const ratioL  = pm_latest > 0.01 ? Math.max(0, Math.min(1, pfijo / pm_latest)) : 0;
+  const vf_latest = vm_latest > 0 ? vm_latest * (0.9 + 0.1 * ratioL) : 0;
+  const if_latest = vf_latest > 0.01 ? pfijo / vf_latest : 0;
+
   return (
     <>
       {/* ══ HEADER ══════════════════════════════════════════════════════ */}
@@ -259,22 +267,46 @@ export default function Dashboard() {
         {/* ══ MÉTRICAS ════════════════════════════════════════════════ */}
         <div className="card">
           <div className="clabel"><span>Voltaje</span><span>⚡</span></div>
-          <div className="cval">{parseFloat(d.v||0).toFixed(3)}<span className="cunit">V</span></div>
-          <div className="csub">INA219 · Bus + Shunt</div>
-          <div className="bar"><div className="barfill" style={{width:`${Math.min(d.v/10*100,100)}%`}}></div></div>
+          <div className="cval">{vm_latest.toFixed(3)}<span className="cunit">V</span></div>
+          <div className="csub" style={{color:'var(--dim)'}}>● MÓVIL · INA219</div>
+          <div className="bar"><div className="barfill" style={{width:`${Math.min(vm_latest/10*100,100)}%`}}></div></div>
+          <div style={{marginTop:'10px',paddingTop:'10px',borderTop:'1px solid rgba(0,200,255,0.18)'}}>
+            <div style={{fontFamily:'var(--mono)',fontSize:'22px',fontWeight:700,color:'#00c8ff',letterSpacing:'.02em'}}>
+              {vf_latest.toFixed(3)}<span style={{fontSize:'11px',marginLeft:'3px',fontWeight:400}}>V</span>
+            </div>
+            <div style={{fontFamily:'var(--mono)',fontSize:'9px',color:'#00c8ff',opacity:.6,marginTop:'2px'}}>▭ FIJO (sim)</div>
+            <div className="bar" style={{marginTop:'6px'}}><div className="barfill" style={{width:`${Math.min(vf_latest/10*100,100)}%`,background:'#00c8ff'}}></div></div>
+          </div>
         </div>
+
         <div className="card b">
           <div className="clabel"><span>Corriente</span><span>～</span></div>
-          <div className="cval">{parseFloat(d.i||0).toFixed(2)}<span className="cunit">mA</span></div>
-          <div className="csub">INA219 · Alta precisión</div>
-          <div className="bar"><div className="barfill" style={{width:`${Math.min(d.i/500*100,100)}%`}}></div></div>
+          <div className="cval">{im_latest.toFixed(2)}<span className="cunit">mA</span></div>
+          <div className="csub" style={{color:'var(--dim)'}}>● MÓVIL · INA219</div>
+          <div className="bar"><div className="barfill" style={{width:`${Math.min(im_latest/500*100,100)}%`}}></div></div>
+          <div style={{marginTop:'10px',paddingTop:'10px',borderTop:'1px solid rgba(0,200,255,0.18)'}}>
+            <div style={{fontFamily:'var(--mono)',fontSize:'22px',fontWeight:700,color:'#00c8ff',letterSpacing:'.02em'}}>
+              {if_latest.toFixed(2)}<span style={{fontSize:'11px',marginLeft:'3px',fontWeight:400}}>mA</span>
+            </div>
+            <div style={{fontFamily:'var(--mono)',fontSize:'9px',color:'#00c8ff',opacity:.6,marginTop:'2px'}}>▭ FIJO (sim)</div>
+            <div className="bar" style={{marginTop:'6px'}}><div className="barfill" style={{width:`${Math.min(if_latest/500*100,100)}%`,background:'#00c8ff'}}></div></div>
+          </div>
         </div>
+
         <div className="card g">
           <div className="clabel"><span>Potencia</span><span>⚙</span></div>
-          <div className="cval">{parseFloat(d.p||0).toFixed(2)}<span className="cunit">mW</span></div>
-          <div className="csub">Máx: {parseFloat(d.mp||0).toFixed(1)} · Prom: {parseFloat(d.pp||0).toFixed(1)}</div>
-          <div className="bar"><div className="barfill" style={{width:`${Math.min(d.p/300*100,100)}%`}}></div></div>
+          <div className="cval">{pm_latest.toFixed(2)}<span className="cunit">mW</span></div>
+          <div className="csub" style={{color:'var(--dim)'}}>● MÓVIL · Máx: {parseFloat(d.mp||0).toFixed(1)}</div>
+          <div className="bar"><div className="barfill" style={{width:`${Math.min(pm_latest/300*100,100)}%`}}></div></div>
+          <div style={{marginTop:'10px',paddingTop:'10px',borderTop:'1px solid rgba(0,200,255,0.18)'}}>
+            <div style={{fontFamily:'var(--mono)',fontSize:'22px',fontWeight:700,color:'#00c8ff',letterSpacing:'.02em'}}>
+              {pfijo.toFixed(2)}<span style={{fontSize:'11px',marginLeft:'3px',fontWeight:400}}>mW</span>
+            </div>
+            <div style={{fontFamily:'var(--mono)',fontSize:'9px',color:'#00c8ff',opacity:.6,marginTop:'2px'}}>▭ FIJO (sim) · POA: {poafij.toFixed(0)} W/m²</div>
+            <div className="bar" style={{marginTop:'6px'}}><div className="barfill" style={{width:`${Math.min(pfijo/300*100,100)}%`,background:'#00c8ff'}}></div></div>
+          </div>
         </div>
+
         <div className="card r">
           <div className="clabel"><span>Temperatura</span><span>🌡</span></div>
           <div className="cval">{parseFloat(d.t||0).toFixed(1)}<span className="cunit">°C</span></div>
