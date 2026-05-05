@@ -24,9 +24,12 @@ export default function Dashboard() {
   const [rec,     setRec]     = useState(true);
   const [toggling, setToggling] = useState(false);
   const [tableView, setTableView] = useState<'movil' | 'fijo'>('movil');
+  const [summary, setSummary] = useState<any>(null);
   const chartRef = useRef<HTMLCanvasElement>(null);
   const gaugeRef = useRef<HTMLCanvasElement>(null);
+  const weekRef  = useRef<HTMLCanvasElement>(null);
   const chartInst = useRef<any>(null);
+  const weekInst  = useRef<any>(null);
 
   // ── helpers ─────────────────────────────────────────────────────────
   async function loadData(filterOn: boolean, s: string, e: string) {
@@ -54,6 +57,14 @@ export default function Dashboard() {
     const r = await fetch('/api/days');
     const j = await r.json();
     if (j.success) setDays(j.days || []);
+  }
+
+  async function loadSummary() {
+    try {
+      const r = await fetch('/api/summary?days=7');
+      const j = await r.json();
+      if (j.success) setSummary(j);
+    } catch(e) { console.error('summary err', e); }
   }
 
   async function loadRec() {
@@ -118,9 +129,11 @@ export default function Dashboard() {
     loadData(false, '', '');
     loadDays();
     loadRec();
+    loadSummary();
     const iv = setInterval(() => {
       loadDays();
       loadRec();
+      loadSummary();
     }, 60000);
     return () => clearInterval(iv);
   }, []);
@@ -189,6 +202,41 @@ export default function Dashboard() {
       }
     });
   }, [history]);
+
+  // ── Chart semanal: barras E_movil vs E_fijo + línea ganancia % ─────
+  useEffect(() => {
+    if (!weekRef.current || !summary?.days?.length) return;
+    if (weekInst.current) weekInst.current.destroy();
+    const ctx = weekRef.current.getContext('2d');
+    if (!ctx) return;
+
+    const lbls = summary.days.map((d:any) => d.fecha.slice(5)); // MM-DD
+    const eM   = summary.days.map((d:any) => +parseFloat(d.e_movil_wh).toFixed(3));
+    const eF   = summary.days.map((d:any) => +parseFloat(d.e_fijo_wh ).toFixed(3));
+    const gan  = summary.days.map((d:any) => +parseFloat(d.ganancia_pct).toFixed(1));
+
+    weekInst.current = new Chart(ctx, {
+      type: 'bar',
+      data: { labels: lbls, datasets: [
+        { label:'E Móvil (Wh)', data:eM, backgroundColor:'rgba(0,230,118,0.65)', borderColor:'#00e676', borderWidth:1.5, borderRadius:3, yAxisID:'yE', order:2 },
+        { label:'E Fijo (Wh)',  data:eF, backgroundColor:'rgba(0,200,255,0.6)',  borderColor:'#00c8ff', borderWidth:1.5, borderRadius:3, yAxisID:'yE', order:2 },
+        { label:'Ganancia %',   data:gan, type:'line', borderColor:'#f7a800', backgroundColor:'rgba(247,168,0,.15)', borderWidth:2.5, pointRadius:4, pointBackgroundColor:'#f7a800', tension:0.3, yAxisID:'yG', order:1 },
+      ]},
+      options: {
+        animation:false, responsive:true, maintainAspectRatio:false,
+        interaction:{ mode:'index', intersect:false },
+        scales: {
+          x:  { ticks:{color:'#7090b0',font:{family:'Share Tech Mono',size:10}}, grid:{color:'rgba(26,40,64,0.4)'} },
+          yE: { type:'linear', position:'left',  min:0, ticks:{color:'#00e676',font:{family:'Share Tech Mono',size:9},callback:(v:any)=>`${v} Wh`}, grid:{color:'rgba(26,40,64,0.4)'} },
+          yG: { type:'linear', position:'right', min:0, ticks:{color:'#f7a800',font:{family:'Share Tech Mono',size:9},callback:(v:any)=>`${v}%`}, grid:{display:false} },
+        },
+        plugins: {
+          legend:{ labels:{ color:'#d0e0f0', font:{family:'Share Tech Mono',size:10}, boxWidth:18, padding:12, usePointStyle:true } },
+          tooltip:{ backgroundColor:'#0b1018', borderColor:'#1a2840', borderWidth:1, titleColor:'#d0e0f0', bodyColor:'#7090b0' }
+        }
+      }
+    });
+  }, [summary]);
 
   // ── Gauge ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -488,6 +536,61 @@ export default function Dashboard() {
           <div className="irow"><span className="ik">ENFRIAMIENTOS</span><span className="iv ivg">{d.ec}</span></div>
           <div className="irow"><span className="ik">MEJOR POT.</span><span className="iv ivg">{parseFloat(d.mp||0).toFixed(2)} mW</span></div>
           <div className="irow"><span className="ik">PUNTOS VISTA</span><span className="iv">{history.length}</span></div>
+        </div>
+
+        {/* ══ ANÁLISIS SEMANAL ════════════════════════════════════════ */}
+        <div className="card wide">
+          <div className="ptitle" style={{flexWrap:'wrap',gap:'10px',alignItems:'center'}}>
+            <span>▤ ANÁLISIS SEMANAL — ENERGÍA Y GANANCIA POR DÍA</span>
+            <div style={{display:'flex',gap:'8px',alignItems:'center',flexShrink:0}}>
+              {summary?.totals && (
+                <span style={{color:'var(--dim)',fontSize:'10px',fontFamily:'var(--mono)'}}>
+                  {summary.totals.dias} días · Σ móvil: <span style={{color:'var(--g)'}}>{summary.totals.e_movil_total} Wh</span> · Σ fijo: <span style={{color:'#00c8ff'}}>{summary.totals.e_fijo_total} Wh</span> · ganancia prom: <span style={{color:'var(--y)'}}>{summary.totals.ganancia_avg}%</span>
+                </span>
+              )}
+              <a href="/api/summary?days=7&format=csv" download
+                 style={{padding:'5px 14px',borderRadius:'4px',border:'1px solid var(--y)',color:'var(--y)',fontFamily:'var(--mono)',fontSize:'10px',letterSpacing:'.08em',textDecoration:'none',background:'rgba(247,168,0,.07)'}}>
+                ↓ CSV RESUMEN
+              </a>
+            </div>
+          </div>
+          <div style={{position:'relative',height:'260px'}}>
+            <canvas ref={weekRef}></canvas>
+          </div>
+          {summary?.days?.length > 0 && (
+            <div className="twrap" style={{maxHeight:'200px',marginTop:'12px'}}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>FECHA</th>
+                    <th style={{color:'var(--g)'}}>E MÓVIL (Wh)</th>
+                    <th style={{color:'#00c8ff'}}>E FIJO (Wh)</th>
+                    <th style={{color:'var(--y)'}}>GANANCIA %</th>
+                    <th>P MÓVIL PICO (mW)</th>
+                    <th>P FIJO PICO (mW)</th>
+                    <th>GHI MÁX</th>
+                    <th>T PROM</th>
+                    <th>η PROM</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {summary.days.map((r:any) => (
+                    <tr key={r.fecha}>
+                      <td>{r.fecha}</td>
+                      <td style={{color:'var(--g)'}}>{(+r.e_movil_wh).toFixed(3)}</td>
+                      <td style={{color:'#00c8ff'}}>{(+r.e_fijo_wh).toFixed(3)}</td>
+                      <td style={{color:parseFloat(r.ganancia_pct)>=0?'var(--y)':'var(--r)',fontWeight:700}}>{(+r.ganancia_pct).toFixed(2)}</td>
+                      <td>{(+r.p_movil_pico_mw).toFixed(1)}</td>
+                      <td>{(+r.p_fijo_pico_mw).toFixed(1)}</td>
+                      <td>{(+r.ghi_max).toFixed(0)}</td>
+                      <td>{(+r.t_prom).toFixed(1)}°C</td>
+                      <td>{(parseFloat(r.eta_prom)*100).toFixed(2)}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         {/* ══ TABLA ══════════════════════════════════════════════════ */}
